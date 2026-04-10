@@ -77,7 +77,7 @@
             const { data, error } = await supabase
                 .from('customer')
                 .select('*')
-                .order('datecreated', { ascending: false });
+                .order('id', { ascending: false });
 
             const list = document.getElementById('customer-list');
             
