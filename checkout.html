@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Elena's Shop - Checkout</title>
+    <style>
+        :root { --primary: #3ecf8e; --dark: #2f2f2f; --light: #f4f4f4; }
+        body { font-family: sans-serif; margin: 0; background: var(--light); padding: 20px; }
+        
+        .receipt-card { 
+            background: white; 
+            max-width: 500px; 
+            margin: 20px auto; 
+            padding: 40px; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1); 
+        }
+
+        .header-info { text-align: center; border-bottom: 2px dashed #ddd; padding-bottom: 20px; margin-bottom: 20px; }
+        .customer-summary { margin-bottom: 20px; font-size: 0.9em; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th { text-align: left; border-bottom: 1px solid #eee; padding: 10px 0; }
+        td { padding: 10px 0; border-bottom: 1px solid #f9f9f9; }
+        
+        .total-row { font-size: 1.2em; font-weight: bold; text-align: right; margin-top: 20px; padding-top: 10px; border-top: 2px solid var(--dark); }
+        
+        .no-print { display: flex; gap: 10px; justify-content: center; margin-top: 30px; }
+        .btn { padding: 12px 25px; border-radius: 4px; border: none; font-weight: bold; cursor: pointer; }
+        .btn-print { background: var(--dark); color: white; }
+        .btn-done { background: var(--primary); color: white; }
+
+        /* PRINT LOGIC: Hides everything except the receipt when printing */
+        @media print {
+            body { background: white; padding: 0; }
+            .no-print, header, nav { display: none !important; }
+            .receipt-card { box-shadow: none; margin: 0; max-width: 100%; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="receipt-card" id="receipt">
+        <div class="header-info">
+            <h2 style="margin:0;">ELENA'S AUTO SHOP</h2>
+            <p style="color: #666; font-size: 0.8em;">123 Garage Lane, Quezon City<br>Tel: 0917-XXX-XXXX</p>
+        </div>
+
+        <div class="customer-summary">
+            <strong>Customer:</strong> <span id="res-name">---</span><br>
+            <strong>Plate No:</strong> <span id="res-plate">---</span><br>
+            <strong>Date:</strong> <span id="res-date"></span>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Description</th>
+                    <th style="text-align:right;">Price</th>
+                </tr>
+            </thead>
+            <tbody id="items-body">
+                </tbody>
+        </table>
+
+        <div class="total-row">
+            TOTAL: ₱<span id="grand-total">0.00</span>
+        </div>
+    </div>
+
+    <div class="no-print">
+        <button class="btn btn-print" onclick="window.print()">Print Receipt</button>
+        <button class="btn btn-done" onclick="location.href='dashboard.html'">Finalize & Close</button>
+    </div>
+
+    <script type="module">
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
+        const supabaseUrl = 'https://yrqtnaxnshkkizradtsd.supabase.co'
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlycXRuYXhuc2hra2l6cmFkdHNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3ODY5NTMsImV4cCI6MjA5MTM2Mjk1M30.dBveYrCJ24XIkyx6rc-iVaYkdOBGgsa-wuCV2shr1cY'
+        const supabase = createClient(supabaseUrl, supabaseKey)
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const plate = urlParams.get('plate');
+
+        async function loadReceipt() {
+            if (!plate) return;
+
+            // 1. Get Transaction Items
+            const { data: items, error } = await supabase
+                .from('transaction_details')
+                .select('*')
+                .eq('plate_number', plate);
+
+            if (error) {
+                console.error(error);
+                return;
+            }
+
+            // 2. Display basic info
+            document.getElementById('res-plate').innerText = plate;
+            document.getElementById('res-date').innerText = new Date().toLocaleDateString();
+            
+            // 3. Populate Table and Calculate Total
+            const tableBody = document.getElementById('items-body');
+            let total = 0;
+
+            tableBody.innerHTML = items.map(item => {
+                total += parseFloat(item.price);
+                return `
+                    <tr>
+                        <td>${item.item_name} <br><small style="color:#888">${item.item_type}</small></td>
+                        <td style="text-align:right;">₱${parseFloat(item.price).toFixed(2)}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            document.getElementById('grand-total').innerText = total.toFixed(2);
+            
+            // Optional: Get Customer name from 'customer' table if needed
+            const { data: cust } = await supabase.from('bays').select('current_customer').eq('current_plate', plate).maybeSingle();
+            if(cust) document.getElementById('res-name').innerText = cust.current_customer;
+        }
+
+        loadReceipt();
+    </script>
+</body>
+</html>
