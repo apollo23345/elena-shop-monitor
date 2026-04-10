@@ -38,6 +38,24 @@
     </style>
 </head>
 <body>
+    <header>
+    <div class="logo-area">
+        <img src="https://via.placeholder.com/40" alt="Logo"> 
+        ELENA'S AUTO SHOP
+    </div>
+    <div class="user-area">
+        <span id="display-user-name">Employee Name</span>
+        <button onclick="logout()" style="background:#ff4d4d; color:white; border:none; padding:5px 10px; cursor:pointer; border-radius:4px;">Logout</button>
+    </div>
+</header>
+
+<nav id="navbar">
+    <button id="nav-dash" onclick="location.href='dashboard.html'">Dashboard</button>
+    <button id="nav-new" onclick="location.href='new-customer.html'">New Customer</button>
+    <button id="nav-book" onclick="location.href='service-booking.html'">Service Booking</button>
+    <button id="nav-check" onclick="location.href='checkout.html'">Check Out</button>
+    <button id="admin-nav" class="admin-only" onclick="location.href='admin.html'">Admin Control</button>
+</nav>
 
     <div class="receipt-card" id="receipt">
         <div class="header-info">
