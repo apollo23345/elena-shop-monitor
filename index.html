@@ -32,10 +32,8 @@
     </div>
 
     <script type="module">
-        // Import Supabase logic
         import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
 
-        // YOUR SPECIFIC CONNECTION KEYS
         const supabaseUrl = 'https://yrqtnaxnshkkizradtsd.supabase.co'
         const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlycXRuYXhuc2hra2l6cmFkdHNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3ODY5NTMsImV4cCI6MjA5MTM2Mjk1M30.dBveYrCJ24XIkyx6rc-iVaYkdOBGgsa-wuCV2shr1cY'
         const supabase = createClient(supabaseUrl, supabaseKey)
@@ -44,24 +42,29 @@
 
         // 1. ADD CUSTOMER (SQL INSERT)
         window.addCustomer = async () => {
-            const fName = document.getElementById('fName').value;
-            const lName = document.getElementById('lName').value;
-            const phone = document.getElementById('phone').value;
+            const fNameInput = document.getElementById('fName').value;
+            const lNameInput = document.getElementById('lName').value;
+            const phoneInput = document.getElementById('phone').value;
 
-            if(!fName || !lName) return alert("Please fill in names");
+            if(!fNameInput || !lNameInput) return alert("Please fill in names");
 
             status.innerText = "Processing SQL Insert...";
 
+            // NOTICE: All keys are now lowercase to match your SQL table
             const { error } = await supabase
                 .from('customer')
-                .insert([{ firstName: fName, lastName: lName, contactNum: phone }])
+                .insert([{ 
+                    firstname: fNameInput, 
+                    lastname: lNameInput, 
+                    contactnum: phoneInput 
+                }])
 
             if (error) {
                 console.error(error);
                 status.innerText = "Error: " + error.message;
             } else {
                 status.innerText = "Success! Row added to PostgreSQL.";
-                loadCustomers(); // Refresh list
+                loadCustomers();
                 document.getElementById('fName').value = '';
                 document.getElementById('lName').value = '';
                 document.getElementById('phone').value = '';
@@ -70,27 +73,27 @@
 
         // 2. LOAD CUSTOMERS (SQL SELECT)
         async function loadCustomers() {
+            // Notice: 'customer' and 'datecreated' are lowercase
             const { data, error } = await supabase
-                .from('Customer')
+                .from('customer')
                 .select('*')
-                .order('dateCreated', { ascending: false });
+                .order('datecreated', { ascending: false });
 
             const list = document.getElementById('customer-list');
             
             if (data) {
                 list.innerHTML = data.map(c => `
                     <div class="customer-item">
-                        <strong>${c.firstName} ${c.lastName}</strong>
-                        <span>${c.contactNum}</span>
+                        <strong>${c.firstname} ${c.lastname}</strong>
+                        <span>${c.contactnum}</span>
                     </div>
                 `).join('') || "No customers in the database yet.";
+            } else {
+                list.innerHTML = "Database is empty.";
             }
         }
 
-        // Connect button to function
         document.getElementById('addBtn').onclick = addCustomer;
-
-        // Initial load
         loadCustomers();
     </script>
 </body>
