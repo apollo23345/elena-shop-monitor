@@ -53,7 +53,7 @@
             status.innerText = "Processing SQL Insert...";
 
             const { error } = await supabase
-                .from('Customer')
+                .from('customer')
                 .insert([{ firstName: fName, lastName: lName, contactNum: phone }])
 
             if (error) {
