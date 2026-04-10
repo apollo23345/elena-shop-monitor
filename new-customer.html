@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Elena's Shop - New Customer</title>
+    <style>
+        :root { --primary: #3ecf8e; --dark: #2f2f2f; --light: #f4f4f4; }
+        body { font-family: sans-serif; margin: 0; background: var(--light); }
+        
+        /* HEADER & NAVBAR */
+        header { background: white; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ddd; }
+        .logo-area { display: flex; align-items: center; gap: 10px; font-weight: bold; font-size: 1.2em; }
+        .user-area { display: flex; align-items: center; gap: 15px; }
+        nav { background: var(--dark); padding: 10px; display: flex; gap: 10px; justify-content: center; }
+        nav button { background: transparent; color: white; border: 1px solid white; padding: 8px 15px; cursor: pointer; border-radius: 4px; }
+        nav button:hover, nav button.active { background: var(--primary); border-color: var(--primary); }
+        .admin-only { display: none; border-color: gold; color: gold; }
+
+        /* FORM */
+        .container { max-width: 600px; margin: 30px auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h2 { margin-top: 0; color: var(--dark); border-bottom: 2px solid var(--primary); padding-bottom: 10px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 0.9em; }
+        input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        .btn-submit { background: var(--primary); color: white; border: none; padding: 15px; width: 100%; font-size: 1em; font-weight: bold; cursor: pointer; border-radius: 4px; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo-area">
+            <img src="https://via.placeholder.com/40" alt="Logo"> 
+            ELENA'S AUTO SHOP
+        </div>
+        <div class="user-area">
+            <span id="display-user-name">Employee Name</span>
+            <button onclick="logout()" style="background:#ff4d4d; color:white; border:none; padding:5px 10px; cursor:pointer; border-radius:4px;">Logout</button>
+        </div>
+    </header>
+
+    <nav id="navbar">
+        <button onclick="location.href='dashboard.html'">Dashboard</button>
+        <button class="active" onclick="location.href='new-customer.html'">New Customer</button>
+        <button onclick="location.href='service-booking.html'">Service Booking</button>
+        <button onclick="location.href='checkout.html'">Check Out</button>
+        <button id="admin-nav" class="admin-only" onclick="location.href='admin.html'">Admin Control</button>
+    </nav>
+
+    <div class="container">
+        <h2>Customer & Vehicle Registration</h2>
+        <div class="form-group">
+            <label>First Name</label>
+            <input type="text" id="fname" placeholder="Enter First Name">
+        </div>
+        <div class="form-group">
+            <label>Last Name</label>
+            <input type="text" id="lname" placeholder="Enter Last Name">
+        </div>
+        <div class="form-group">
+            <label>Contact Number</label>
+            <input type="text" id="phone" placeholder="09XXXXXXXXX">
+        </div>
+        <hr>
+        <div class="form-group">
+            <label>Plate Number</label>
+            <input type="text" id="plate" placeholder="ABC-1234">
+        </div>
+        <div class="form-group">
+            <label>Car Model/Brand</label>
+            <input type="text" id="car-model" placeholder="Toyota Vios 2023">
+        </div>
+        <button class="btn-submit" id="regBtn">Register & Book Service</button>
+        <p id="status" style="text-align:center; color: #666;"></p>
+    </div>
+
+    <script type="module">
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
+
+        const supabaseUrl = 'https://yrqtnaxnshkkizradtsd.supabase.co'
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlycXRuYXhuc2hra2l6cmFkdHNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3ODY5NTMsImV4cCI6MjA5MTM2Mjk1M30.dBveYrCJ24XIkyx6rc-iVaYkdOBGgsa-wuCV2shr1cY'
+        const supabase = createClient(supabaseUrl, supabaseKey)
+
+        // 1. IDENTITY CHECK (Who is logged in?)
+        const user = JSON.parse(localStorage.getItem('currentUser'));
+        if (!user) {
+            window.location.href = 'login.html'; // Kick back to login if not logged in
+        } else {
+            document.getElementById('display-user-name').innerText = user.first_name + " " + user.last_name;
+            if (user.manager_id === null) {
+                document.getElementById('admin-nav').style.display = 'block';
+            }
+        }
+
+        // 2. REGISTRATION LOGIC
+        document.getElementById('regBtn').onclick = async () => {
+            const fname = document.getElementById('fname').value;
+            const lname = document.getElementById('lname').value;
+            const phone = document.getElementById('phone').value;
+            const plate = document.getElementById('plate').value;
+            const model = document.getElementById('car-model').value;
+            const status = document.getElementById('status');
+
+            if(!fname || !lname || !plate) return alert("Please fill in Name and Plate Number");
+
+            status.innerText = "Registering Customer...";
+
+            // A. Insert Customer
+            const { data: custData, error: custErr } = await supabase
+                .from('customer')
+                .insert([{ firstname: fname, lastname: lname, contactnum: phone }])
+                .select();
+
+            if (custErr) {
+                status.innerText = "Error: " + custErr.message;
+                return;
+            }
+
+            // B. Insert Car linked to Customer
+            const customerId = custData[0].id;
+            const { error: carErr } = await supabase
+                .from('cars')
+                .insert([{ plate_number: plate, brand: model, customer_id: customerId }]);
+
+            if (carErr) {
+                status.innerText = "Error saving car: " + carErr.message;
+            } else {
+                status.innerText = "Success! Redirecting to Booking...";
+                // C. Navigate to Service Booking and pass the Plate Number in the URL
+                setTimeout(() => {
+                    window.location.href = `service-booking.html?plate=${plate}&name=${fname}`;
+                }, 1500);
+            }
+        };
+
+        window.logout = () => {
+            localStorage.removeItem('currentUser');
+            window.location.href = 'login.html';
+        };
+    </script>
+</body>
+</html>
