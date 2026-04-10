@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Elena's Shop Monitor</title>
+    <style>
+        body { font-family: sans-serif; background: #f4f4f4; display: flex; flex-wrap: wrap; gap: 20px; padding: 20px; }
+        .card { background: white; border-radius: 8px; padding: 20px; width: 250px; border-left: 10px solid #ccc; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .occupied { border-left-color: #ff4d4d; }
+        .available { border-left-color: #2ecc71; }
+        h2 { margin: 0; }
+        span { font-weight: bold; text-transform: uppercase; font-size: 0.8em; color: #666; }
+        button { margin-top: 15px; cursor: pointer; padding: 8px; width: 100%; background: #007bff; color: white; border: none; border-radius: 4px; }
+        button:hover { background: #0056b3; }
+    </style>
+</head>
+<body>
+
+    <div id="bay-container">Loading bays from Firebase...</div>
+
+    <script type="module">
+      // Import the functions you need from the SDKs
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+      import { getFirestore, doc, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+      // 1. Your Firebase Configuration
+      const firebaseConfig = {
+        apiKey: "AIzaSyDfVaZU40cTRQnABk4-2UDRh7x4_LRu2oY",
+        authDomain: "elena-shop-system.firebaseapp.com",
+        projectId: "elena-shop-system",
+        storageBucket: "elena-shop-system.firebasestorage.app",
+        messagingSenderId: "982709959614",
+        appId: "1:982709959614:web:db1d07439b9c78b83fd7ef",
+        measurementId: "G-8KY6PHNGKN"
+      };
+
+      // Initialize Firebase
+      const app = initializeApp(firebaseConfig);
+      const db = getFirestore(app);
+
+      // 2. Display the Bays in Real-Time
+      const container = document.getElementById('bay-container');
+      
+      // We listen to Document "1" in the "bays" collection
+      onSnapshot(doc(db, "bays", "1"), (docSnap) => {
+          if (docSnap.exists()) {
+              const data = docSnap.data();
+              const isOccupied = data.status === 'Occupied';
+              
+              container.innerHTML = `
+                <div class="card ${isOccupied ? 'occupied' : 'available'}">
+                    <span>${data.status}</span>
+                    <h2>Bay 1</h2>
+                    <p><strong>Customer:</strong> ${data.customer || 'None'}</p>
+                    <p><strong>Car:</strong> ${data.car_details?.model || 'N/A'} [${data.car_details?.plate || 'N/A'}]</p>
+                    <button onclick="clearBay('1')">Clear Bay</button>
+                </div>
+              `;
+          } else {
+              container.innerHTML = "No data found. Check your Firebase Collection name!";
+          }
+      });
+
+      // 3. The "Clear Bay" Function (made global so the button can see it)
+      window.clearBay = async (id) => {
+          const bayRef = doc(db, "bays", id);
+          try {
+              await updateDoc(bayRef, {
+                  status: "Available",
+                  customer: "None",
+                  car_details: { model: "None", plate: "None" }
+              });
+              console.log("Bay cleared in Firebase!");
+          } catch (error) {
+              console.error("Error clearing bay: ", error);
+              alert("Error! Check console.");
+          }
+      };
+    </script>
+</body>
+</html>
