@@ -1,87 +1,96 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Elena's Shop - SQL Monitor</title>
+    <title>Elena's Shop - SQL System</title>
     <style>
         body { font-family: sans-serif; background: #f4f4f4; padding: 20px; }
         .container { max-width: 800px; margin: auto; }
         .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
         input, button { padding: 10px; margin: 5px 0; width: 100%; box-sizing: border-box; }
-        button { background: #007bff; color: white; border: none; cursor: pointer; border-radius: 4px; }
+        button { background: #3ecf8e; color: white; border: none; cursor: pointer; border-radius: 4px; font-weight: bold; }
+        button:hover { background: #34b27b; }
         .customer-item { background: #fff; padding: 10px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; }
         h2 { color: #333; }
+        .status { font-size: 0.8em; color: #666; text-align: center; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="card">
-            <h2>New Customer Check-In (SQL Insert)</h2>
+            <h2>New Customer Check-In (PostgreSQL)</h2>
             <input type="text" id="fName" placeholder="First Name">
             <input type="text" id="lName" placeholder="Last Name">
             <input type="text" id="phone" placeholder="Contact Number">
-            <button onclick="addCustomer()">Add to Database</button>
+            <button id="addBtn">Add to SQL Table</button>
+            <p id="status" class="status"></p>
         </div>
 
         <div class="card">
             <h2>Current Customers</h2>
-            <div id="customer-list">Loading from PostgreSQL...</div>
+            <div id="customer-list">Connecting to PostgreSQL...</div>
         </div>
     </div>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getDataConnect, executeQuery, executeMutation } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-data-connect.js";
+        // Import Supabase logic
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
 
-        // YOUR CONFIG (Same as before)
-        const firebaseConfig = {
-            apiKey: "AIzaSyDfVaZU40cTRQnABk4-2UDRh7x4_LRu2oY",
-            authDomain: "elena-shop-system.firebaseapp.com",
-            projectId: "elena-shop-system",
-            appId: "1:982709959614:web:db1d07439b9c78b83fd7ef"
-        };
+        // YOUR SPECIFIC CONNECTION KEYS
+        const supabaseUrl = 'https://yrqtnaxnshkkizradtsd.supabase.co'
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlycXRuYXhuc2hra2l6cmFkdHNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3ODY5NTMsImV4cCI6MjA5MTM2Mjk1M30.dBveYrCJ24XIkyx6rc-iVaYkdOBGgsa-wuCV2shr1cY'
+        const supabase = createClient(supabaseUrl, supabaseKey)
 
-        const app = initializeApp(firebaseConfig);
-        const dc = getDataConnect(app);
+        const status = document.getElementById('status');
 
-        // 1. SQL-style Mutation (The INSERT)
+        // 1. ADD CUSTOMER (SQL INSERT)
         window.addCustomer = async () => {
-            const firstName = document.getElementById('fName').value;
-            const lastName = document.getElementById('lName').value;
-            const contactNum = document.getElementById('phone').value;
+            const fName = document.getElementById('fName').value;
+            const lName = document.getElementById('lName').value;
+            const phone = document.getElementById('phone').value;
 
-            const mutation = `
-                mutation CreateCustomer($fName: String!, $lName: String!, $cNum: String!) {
-                    customer_insert(data: {firstName: $fName, lastName: $lName, contactNum: $cNum})
-                }`;
+            if(!fName || !lName) return alert("Please fill in names");
 
-            try {
-                await executeMutation(dc, mutation, { fName: firstName, lName: lastName, cNum: contactNum });
-                alert("Customer Saved to SQL Table!");
-                loadCustomers(); // Refresh the list
-            } catch (e) { console.error(e); }
+            status.innerText = "Processing SQL Insert...";
+
+            const { error } = await supabase
+                .from('Customer')
+                .insert([{ firstName: fName, lastName: lName, contactNum: phone }])
+
+            if (error) {
+                console.error(error);
+                status.innerText = "Error: " + error.message;
+            } else {
+                status.innerText = "Success! Row added to PostgreSQL.";
+                loadCustomers(); // Refresh list
+                document.getElementById('fName').value = '';
+                document.getElementById('lName').value = '';
+                document.getElementById('phone').value = '';
+            }
         };
 
-        // 2. SQL-style Query (The SELECT)
+        // 2. LOAD CUSTOMERS (SQL SELECT)
         async function loadCustomers() {
-            const query = `
-                query GetCustomers {
-                    customers {
-                        firstName
-                        lastName
-                        contactNum
-                    }
-                }`;
-            
-            const result = await executeQuery(dc, query);
+            const { data, error } = await supabase
+                .from('Customer')
+                .select('*')
+                .order('dateCreated', { ascending: false });
+
             const list = document.getElementById('customer-list');
-            list.innerHTML = result.data.customers.map(c => `
-                <div class="customer-item">
-                    <strong>${c.firstName} ${c.lastName}</strong>
-                    <span>${c.contactNum}</span>
-                </div>
-            `).join('') || "No customers found.";
+            
+            if (data) {
+                list.innerHTML = data.map(c => `
+                    <div class="customer-item">
+                        <strong>${c.firstName} ${c.lastName}</strong>
+                        <span>${c.contactNum}</span>
+                    </div>
+                `).join('') || "No customers in the database yet.";
+            }
         }
 
+        // Connect button to function
+        document.getElementById('addBtn').onclick = addCustomer;
+
+        // Initial load
         loadCustomers();
     </script>
 </body>
