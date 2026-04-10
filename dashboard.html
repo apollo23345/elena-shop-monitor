@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Elena's Shop - Dashboard</title>
+    <style>
+        :root { --primary: #3ecf8e; --danger: #ff4d4d; --dark: #2f2f2f; --light: #f4f4f4; }
+        body { font-family: sans-serif; margin: 0; background: var(--light); }
+        header { background: white; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ddd; }
+        nav { background: var(--dark); padding: 10px; display: flex; gap: 10px; justify-content: center; }
+        nav button { background: transparent; color: white; border: 1px solid white; padding: 8px 15px; cursor: pointer; border-radius: 4px; }
+        
+        .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; padding: 20px; }
+        .bay-card { background: white; border-radius: 10px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center; cursor: pointer; border-top: 8px solid #ccc; }
+        .bay-card.occupied { border-top-color: var(--danger); }
+        .bay-card.available { border-top-color: var(--primary); }
+        
+        .sticker { display: inline-block; padding: 5px 15px; border-radius: 20px; font-weight: bold; font-size: 0.8em; margin-bottom: 10px; }
+        .available .sticker { background: #e6fff4; color: var(--primary); }
+        .occupied .sticker { background: #fff0f0; color: var(--danger); }
+
+        /* Assignment Modal */
+        #modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; }
+        .modal-content { background: white; padding: 30px; border-radius: 8px; width: 400px; }
+        select, button { width: 100%; padding: 12px; margin-top: 10px; }
+        .btn-assign { background: var(--primary); color: white; border: none; font-weight: bold; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div style="font-weight:bold;">ELENA'S AUTO SHOP - DASHBOARD</div>
+        <div id="user-display">Loading...</div>
+    </header>
+
+    <nav>
+        <button class="active" style="background:var(--primary)">Dashboard</button>
+        <button onclick="location.href='new-customer.html'">New Customer</button>
+        <button onclick="location.href='service-booking.html'">Service Booking</button>
+        <button onclick="location.href='checkout.html'">Check Out</button>
+    </nav>
+
+    <div id="pending-alert" style="display:none; background: #fff3cd; padding: 15px; text-align: center; font-weight: bold;">
+        ⚠️ Assignment Pending for: <span id="pending-info"></span>. Click an Available Bay to Assign.
+    </div>
+
+    <div class="dashboard-grid" id="bay-grid">
+        </div>
+
+    <div id="modal">
+        <div class="modal-content">
+            <h3>Assign Job to <span id="target-bay"></span></h3>
+            <label>Select Mechanic:</label>
+            <select id="mech-select"></select>
+            <button class="btn-assign" onclick="confirmAssignment()">Confirm Assignment</button>
+            <button onclick="closeModal()" style="background:none; border:none; color:gray; cursor:pointer;">Cancel</button>
+        </div>
+    </div>
+
+    <script type="module">
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
+        const supabaseUrl = 'https://yrqtnaxnshkkizradtsd.supabase.co'
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlycXRuYXhuc2hra2l6cmFkdHNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3ODY5NTMsImV4cCI6MjA5MTM2Mjk1M30.dBveYrCJ24XIkyx6rc-iVaYkdOBGgsa-wuCV2shr1cY'
+        const supabase = createClient(supabaseUrl, supabaseKey)
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const plate = urlParams.get('plate');
+        const name = urlParams.get('name');
+        let selectedBayId = null;
+
+        if (plate) {
+            document.getElementById('pending-alert').style.display = 'block';
+            document.getElementById('pending-info').innerText = `${name} (${plate})`;
+        }
+
+        async function loadDashboard() {
+            const { data: bays } = await supabase.from('bays').select('*').order('id');
+            const grid = document.getElementById('bay-grid');
+            
+            grid.innerHTML = bays.map(bay => `
+                <div class="bay-card ${bay.status.toLowerCase()}" onclick="handleBayClick(${bay.id}, '${bay.status}', '${bay.bay_name}')">
+                    <div class="sticker">${bay.status.toUpperCase()}</div>
+                    <h2>${bay.bay_name}</h2>
+                    ${bay.status === 'Occupied' ? `
+                        <p><strong>${bay.current_customer}</strong></p>
+                        <p style="font-size: 0.9em; color: #666;">${bay.current_plate}</p>
+                        <button onclick="event.stopPropagation(); releaseBay(${bay.id})" style="margin-top:10px;">Finish Job</button>
+                    ` : '<p>Empty</p>'}
+                </div>
+            `).join('');
+        }
+
+        window.handleBayClick = async (id, status, bayName) => {
+            if (status === 'Available' && plate) {
+                selectedBayId = id;
+                document.getElementById('target-bay').innerText = bayName;
+                const { data: mechs } = await supabase.from('mechanics').select('*').eq('status', 'Available');
+                document.getElementById('mech-select').innerHTML = mechs.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
+                document.getElementById('modal').style.display = 'flex';
+            }
+        };
+
+        window.confirmAssignment = async () => {
+            const mechId = document.getElementById('mech-select').value;
+            
+            // 1. Update Bay to Occupied
+            await supabase.from('bays').update({ 
+                status: 'Occupied', 
+                current_plate: plate, 
+                current_customer: name 
+            }).eq('id', selectedBayId);
+
+            // 2. Update Mechanic to Busy
+            await supabase.from('mechanics').update({ status: 'Busy' }).eq('id', mechId);
+
+            // 3. Clear URL and Refresh
+            window.location.href = 'dashboard.html';
+        };
+
+        window.releaseBay = async (id) => {
+            const { data: bay } = await supabase.from('bays').select('current_plate').eq('id', id).single();
+            await supabase.from('bays').update({ status: 'Available', current_plate: null, current_customer: null }).eq('id', id);
+            // Navigate to Checkout with the plate
+            window.location.href = `checkout.html?plate=${bay.current_plate}`;
+        };
+
+        window.closeModal = () => document.getElementById('modal').style.display = 'none';
+        loadDashboard();
+    </script>
+</body>
+</html>
