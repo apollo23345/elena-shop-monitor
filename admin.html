@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Elena's Shop - Admin Management</title>
+    <style>
+        :root { --primary: #3ecf8e; --dark: #2f2f2f; --light: #f4f4f4; --danger: #ff4d4d; }
+        body { font-family: sans-serif; margin: 0; background: var(--light); }
+        header { background: white; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ddd; }
+        nav { background: var(--dark); padding: 10px; display: flex; gap: 10px; justify-content: center; }
+        nav button { background: transparent; color: white; border: 1px solid white; padding: 8px 15px; cursor: pointer; border-radius: 4px; }
+        
+        .admin-nav { background: #eee; padding: 10px; display: flex; justify-content: center; gap: 20px; border-bottom: 1px solid #ccc; }
+        .admin-nav button { border: none; background: none; font-weight: bold; cursor: pointer; padding: 10px; color: #666; }
+        .admin-nav button.active-tab { color: var(--primary); border-bottom: 3px solid var(--primary); }
+
+        .container { max-width: 900px; margin: 20px auto; padding: 20px; background: white; border-radius: 8px; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .form-inline { display: flex; gap: 10px; margin-bottom: 20px; background: #f9f9f9; padding: 15px; border-radius: 5px; }
+        input { padding: 10px; border: 1px solid #ddd; border-radius: 4px; flex: 1; }
+        
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 12px; border-bottom: 1px solid #eee; }
+        .btn-add { background: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; }
+        .btn-del { background: var(--danger); color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div style="font-weight:bold;">ELENA'S AUTO SHOP - ADMIN</div>
+        <div id="user-display">Admin Name</div>
+    </header>
+
+    <nav>
+        <button onclick="location.href='dashboard.html'">Dashboard</button>
+        <button onclick="location.href='new-customer.html'">New Customer</button>
+        <button onclick="location.href='service-booking.html'">Service Booking</button>
+        <button onclick="location.href='checkout.html'">Check Out</button>
+    </nav>
+
+    <div class="admin-nav">
+        <button id="btn-mech" class="active-tab" onclick="showTab('mechanics')">Mechanics</button>
+        <button id="btn-srv" onclick="showTab('services')">Services</button>
+        <button id="btn-inv" onclick="showTab('inventory')">Inventory</button>
+    </div>
+
+    <div class="container">
+        <div id="tab-mechanics" class="tab-content active">
+            <h3>Manage Mechanics</h3>
+            <div class="form-inline">
+                <input type="text" id="mech-name" placeholder="Mechanic Name">
+                <button class="btn-add" onclick="addItem('mechanics')">Add Mechanic</button>
+            </div>
+            <table id="table-mechanics"><thead><tr><th>Name</th><th>Status</th><th>Action</th></tr></thead><tbody></tbody></table>
+        </div>
+
+        <div id="tab-services" class="tab-content">
+            <h3>Manage Services</h3>
+            <div class="form-inline">
+                <input type="text" id="srv-name" placeholder="Service Name">
+                <input type="number" id="srv-price" placeholder="Price (₱)">
+                <button class="btn-add" onclick="addItem('services')">Add Service</button>
+            </div>
+            <table id="table-services"><thead><tr><th>Service</th><th>Price</th><th>Action</th></tr></thead><tbody></tbody></table>
+        </div>
+
+        <div id="tab-inventory" class="tab-content">
+            <h3>Manage Inventory</h3>
+            <div class="form-inline">
+                <input type="text" id="inv-name" placeholder="Item Name">
+                <input type="number" id="inv-price" placeholder="Price (₱)">
+                <button class="btn-add" onclick="addItem('inventory')">Add Item</button>
+            </div>
+            <table id="table-inventory"><thead><tr><th>Item</th><th>Price</th><th>Action</th></tr></thead><tbody></tbody></table>
+        </div>
+    </div>
+
+    <script type="module">
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
+        const supabaseUrl = 'https://yrqtnaxnshkkizradtsd.supabase.co'
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlycXRuYXhuc2hra2l6cmFkdHNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3ODY5NTMsImV4cCI6MjA5MTM2Mjk1M30.dBveYrCJ24XIkyx6rc-iVaYkdOBGgsa-wuCV2shr1cY'
+        const supabase = createClient(supabaseUrl, supabaseKey)
+
+        // Tab Switching Logic
+        window.showTab = (tabName) => {
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.admin-nav button').forEach(b => b.classList.remove('active-tab'));
+            document.getElementById('tab-' + tabName).classList.add('active');
+            document.getElementById('btn-' + (tabName === 'mechanics' ? 'mech' : tabName === 'services' ? 'srv' : 'inv')).classList.add('active-tab');
+            loadData(tabName);
+        }
+
+        // Add Data
+        window.addItem = async (table) => {
+            let payload = {};
+            if (table === 'mechanics') payload = { name: document.getElementById('mech-name').value };
+            if (table === 'services') payload = { service_name: document.getElementById('srv-name').value, price: document.getElementById('srv-price').value };
+            if (table === 'inventory') payload = { item_name: document.getElementById('inv-name').value, price: document.getElementById('inv-price').value };
+
+            const { error } = await supabase.from(table).insert([payload]);
+            if (!error) loadData(table);
+            else alert(error.message);
+        }
+
+        // Delete Data
+        window.deleteItem = async (table, id) => {
+            if(confirm("Are you sure?")) {
+                await supabase.from(table).delete().eq('id', id);
+                loadData(table);
+            }
+        }
+
+        // Load Data
+        async function loadData(table) {
+            const { data } = await supabase.from(table).select('*').order('id');
+            const tbody = document.querySelector(`#table-${table} tbody`);
+            
+            tbody.innerHTML = data.map(item => `
+                <tr>
+                    <td>${item.name || item.service_name || item.item_name}</td>
+                    <td>${item.price ? '₱' + item.price : item.status}</td>
+                    <td><button class="btn-del" onclick="deleteItem('${table}', ${item.id})">Delete</button></td>
+                </tr>
+            `).join('');
+        }
+
+        // Security Check
+        const user = JSON.parse(localStorage.getItem('currentUser'));
+        if (!user || user.manager_id !== null) {
+            alert("Access Denied: Admins Only");
+            window.location.href = 'dashboard.html';
+        } else {
+            document.getElementById('user-display').innerText = user.first_name + " " + user.last_name + " (Admin)";
+            loadData('mechanics');
+        }
+    </script>
+</body>
+</html>

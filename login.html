@@ -57,15 +57,21 @@
             });
 
             if (foundUser) {
-                status.style.color = "green";
-                if (foundUser.manager_id === null) {
-                    status.innerText = "Admin Login Successful!";
-                    // window.location.href = "admin.html"; 
-                } else {
-                    status.innerText = "Staff Login Successful!";
-                    // window.location.href = "staff.html";
-                }
-            } else {
+    status.style.color = "green";
+    
+    // SAVE THE USER DATA SO THE OTHER PAGES KNOW WHO IS LOGGED IN
+    localStorage.setItem('currentUser', JSON.stringify(foundUser));
+
+    if (foundUser.manager_id === null) {
+        status.innerText = "Admin Login Successful! Redirecting...";
+        // This is the line that actually moves the page:
+        window.location.href = "admin.html"; 
+    } else {
+        status.innerText = "Staff Login Successful! Redirecting...";
+        // This moves the staff to the New Customer page to start a job:
+        window.location.href = "new-customer.html";
+    }
+} else {
                 status.style.color = "red";
                 status.innerText = "Invalid Username or Password";
             }
