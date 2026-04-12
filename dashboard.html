@@ -110,14 +110,14 @@
        // Show Admin button only if manager_id is null
       if (user.manager_id === null) {
         document.getElementById('admin-nav').style.display = 'block';
+        }
     }
-}
 
-// 2. LOGOUT FUNCTION
-window.logout = () => {
-    localStorage.removeItem('currentUser');
-    window.location.href = 'login.html';
-};
+    // 2. LOGOUT FUNCTION
+    window.logout = () => {
+        localStorage.removeItem('currentUser');
+        window.location.href = 'login.html';
+    };
 
 
         import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
