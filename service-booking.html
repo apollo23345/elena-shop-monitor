@@ -97,12 +97,22 @@
     <hr>
     
 <label>Type/Select Parts/Inventory</label>
-<input list="part-options" id="part-select-input" placeholder="Start typing a part..." onchange="checkAlternatives(this.value)">
+<input list="part-options" id="part-select-input" placeholder="Start typing a part..." oninput="checkAlternatives(this.value)">
 <datalist id="part-options"></datalist>
 
-<div id="alt-suggestion-box" style="font-size: 0.85em; color: #2ecc71; margin-top: 5px; font-style: italic;"></div>
-
 <button onclick="addItem('Part')">Add Part</button>
+
+<div id="alt-suggestion-box" style="
+    font-size: 0.85em; 
+    color: #555; 
+    margin-top: 10px; 
+    font-style: italic; 
+    max-height: 120px; 
+    overflow-y: auto; 
+    border-left: 3px solid #2ecc71; 
+    padding-left: 10px;
+"></div>
+
 </div>
 
         <div class="card">
@@ -221,75 +231,41 @@
 
 window.checkAlternatives = (val) => {
     const suggestionBox = document.getElementById('alt-suggestion-box');
-    if (!val) {
-        suggestionBox.innerHTML = "";
-        return;
-    }
-
-    // 1. Extract the clean name (e.g., "Synthetic Oil")
-    const typedName = val.split(' (Stock:')[0].trim().toLowerCase();
     
-    // 2. Find the item by matching the lowercase name
-    const currentItem = inventoryData.find(i => i.item_name.toLowerCase() === typedName);
-
-    // 3. If item doesn't exist or has no group ID, clear and stop
-    if (!currentItem || !currentItem.oem_ref_id) {
+    // Clear box if input is empty
+    if (!val || val.trim() === "") {
         suggestionBox.innerHTML = "";
         return;
     }
 
-    // 4. Find all OTHER items with the SAME oem_ref_id
+    const typedName = val.split(' (Stock:')[0].trim();
+    const currentItem = inventoryData.find(i => i.item_name === typedName);
+
+    // If item not found in data yet, stay quiet
+    if (!currentItem) return;
+
+    // Find ALL items in the same group, excluding the one currently selected
     const alternatives = inventoryData.filter(i => 
         i.oem_ref_id === currentItem.oem_ref_id && 
-        i.item_name.toLowerCase() !== typedName
+        i.item_name !== currentItem.item_name
     );
 
-    // 5. Display the results
     if (alternatives.length > 0) {
-        const names = alternatives.map(a => 
-            `<b style="color: #27ae60;">${a.item_name}</b> (₱${a.price})`
-        ).join(', ');
+        // Create a scrollable list of alternatives with stock
+        const listItems = alternatives.map(a => 
+            `<div style="margin-bottom: 4px;">
+                <b style="color: #27ae60;">${a.item_name}</b> 
+                <span style="color: #888;">(₱${a.price} | Stock: ${a.current_qty})</span>
+            </div>`
+        ).join('');
         
-        suggestionBox.innerHTML = `💡 Alternatives: ${names}`;
+        suggestionBox.innerHTML = `<strong>💡 Alternatives found:</strong><br>${listItems}`;
     } else {
-        suggestionBox.innerHTML = "";
-    }
-};window.checkAlternatives = (val) => {
-    const suggestionBox = document.getElementById('alt-suggestion-box');
-    if (!val) {
-        suggestionBox.innerHTML = "";
-        return;
-    }
-
-    // 1. Extract the clean name (e.g., "Synthetic Oil")
-    const typedName = val.split(' (Stock:')[0].trim().toLowerCase();
-    
-    // 2. Find the item by matching the lowercase name
-    const currentItem = inventoryData.find(i => i.item_name.toLowerCase() === typedName);
-
-    // 3. If item doesn't exist or has no group ID, clear and stop
-    if (!currentItem || !currentItem.oem_ref_id) {
-        suggestionBox.innerHTML = "";
-        return;
-    }
-
-    // 4. Find all OTHER items with the SAME oem_ref_id
-    const alternatives = inventoryData.filter(i => 
-        i.oem_ref_id === currentItem.oem_ref_id && 
-        i.item_name.toLowerCase() !== typedName
-    );
-
-    // 5. Display the results
-    if (alternatives.length > 0) {
-        const names = alternatives.map(a => 
-            `<b style="color: #27ae60;">${a.item_name}</b> (₱${a.price})`
-        ).join(', ');
-        
-        suggestionBox.innerHTML = `💡 Alternatives: ${names}`;
-    } else {
-        suggestionBox.innerHTML = "";
+        // Explicit message for items with no alternatives (like tires)
+        suggestionBox.innerHTML = `<span style="color: #999;">ℹ️ No alternatives available for this part.</span>`;
     }
 };
+
 
     window.removeItem = (index) => {
         const item = selectedItems[index];
