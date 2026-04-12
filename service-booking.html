@@ -124,7 +124,6 @@
     const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlycXRuYXhuc2hra2l6cmFkdHNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3ODY5NTMsImV4cCI6MjA5MTM2Mjk1M30.dBveYrCJ24XIkyx6rc-iVaYkdOBGgsa-wuCV2shr1cY'
     const supabase = createClient(supabaseUrl, supabaseKey)
 
-    // Identity & Access
     const user = JSON.parse(localStorage.getItem('currentUser'));
     if (!user) {
         window.location.href = 'login.html';
@@ -144,187 +143,149 @@
     const urlParams = new URLSearchParams(window.location.search);
     const plate = urlParams.get('plate');
     const name = urlParams.get('name');
-    
-    if (plate) {
-        document.getElementById('customer-info').innerText = `Booking for: ${name} (${plate})`;
-    }
+    if (plate) document.getElementById('customer-info').innerText = `Booking for: ${name} (${plate})`;
 
     let serviceData = []; 
     let inventoryData = [];
     let selectedItems = []; 
 
     async function loadOptions() {
-        const { data: srv } = await supabase.from('services').select('*');
-        const { data: inv } = await supabase.from('inventory').select('*');
-        
-        if (srv) serviceData = srv;
-        if (inv) {
-            // We create current_qty so we can track "temporary" stock changes before saving
-            inventoryData = inv.map(item => ({ ...item, current_qty: item.stock_quantity }));
+        try {
+            const { data: srv } = await supabase.from('services').select('*');
+            const { data: inv } = await supabase.from('inventory').select('*');
+            
+            if (srv) serviceData = srv;
+            if (inv) {
+                // SAFETY: Filter out any rows that might have empty names in the database
+                inventoryData = inv
+                    .filter(item => item.item_name) 
+                    .map(item => ({ ...item, current_qty: item.stock_quantity || 0 }));
+            }
+            renderDatalists();
+        } catch (err) {
+            console.error("Critical Load Error:", err);
         }
-        renderDatalists();
     }
 
-function renderDatalists() {
-    // Fill Service dropdown
-    const srvList = document.getElementById('service-options');
-    if (srvList) {
-        srvList.innerHTML = serviceData.map(s => 
-            `<option value="${s.service_name}">`
-        ).join('');
-    }
-    
-    // Fill Part dropdown
-    const partList = document.getElementById('part-options');
-    if (partList) {
-        partList.innerHTML = inventoryData.map(i => 
-            `<option value="${i.item_name} (Stock: ${i.current_qty})">`
-        ).join('');
-    }
-}
-
-window.addItem = (type) => {
-    const inputId = type === 'Service' ? 'service-select-input' : 'part-select-input';
-    const input = document.getElementById(inputId);
-    let typedValue = input.value.split(/\s*\(/)[0].trim().toLowerCase(); 
-
-    if (type === 'Service') {
-        const found = serviceData.find(s => s.service_name.toLowerCase() === typedValue);
-        if (!found) return alert("Service not found!");
-
-        const isAlreadySelected = selectedItems.some(item => item.type === 'Service' && item.name.toLowerCase() === typedValue);
-        if (isAlreadySelected) return alert("Service already added!");
-
-        selectedItems.push({ type, name: found.service_name, price: found.price, id: found.id, qty: 1 });
-    } else {
-        const qtyInput = document.getElementById('part-qty-input');
-        const qtyToAdd = parseInt(qtyInput.value);
-        const found = inventoryData.find(i => i.item_name.trim().toLowerCase() === typedValue);
+    function renderDatalists() {
+        const srvList = document.getElementById('service-options');
+        if (srvList) {
+            srvList.innerHTML = serviceData.map(s => `<option value="${s.service_name}">`).join('');
+        }
         
-        if (!found) return alert("Part not found!");
-        if (qtyToAdd < 1) return alert("Minimum quantity is 1");
-        if (found.current_qty < qtyToAdd) return alert(`Not enough stock! Only ${found.current_qty} left.`);
+        const partList = document.getElementById('part-options');
+        if (partList) {
+            // SAFETY: Ensure we only map items that exist
+            partList.innerHTML = inventoryData.map(i => 
+                `<option value="${i.item_name} (Stock: ${i.current_qty})">`
+            ).join('');
+        }
+        console.log("Dropdowns rendered with", inventoryData.length, "items.");
+    }
 
-        // MERGE LOGIC: Check if this part ID is already in our list
-        const existingIndex = selectedItems.findIndex(item => item.id === found.id && item.type === 'Part');
+    window.addItem = (type) => {
+        const inputId = type === 'Service' ? 'service-select-input' : 'part-select-input';
+        const input = document.getElementById(inputId);
+        if (!input.value) return;
 
-        if (existingIndex > -1) {
-            selectedItems[existingIndex].qty += qtyToAdd;
+        let typedValue = input.value.split(/\s*\(/)[0].trim().toLowerCase(); 
+
+        if (type === 'Service') {
+            const found = serviceData.find(s => s.service_name.toLowerCase() === typedValue);
+            if (!found) return alert("Service not found!");
+            if (selectedItems.some(item => item.type === 'Service' && item.name.toLowerCase() === typedValue)) {
+                return alert("Service already added!");
+            }
+            selectedItems.push({ type, name: found.service_name, price: found.price, id: found.id, qty: 1 });
         } else {
-            selectedItems.push({ type, name: found.item_name, price: found.price, id: found.id, qty: qtyToAdd });
+            const qtyInput = document.getElementById('part-qty-input');
+            const qtyToAdd = parseInt(qtyInput.value) || 1;
+            const found = inventoryData.find(i => i.item_name.trim().toLowerCase() === typedValue);
+            
+            if (!found) return alert("Part not found!");
+            if (qtyToAdd < 1) return alert("Minimum quantity is 1");
+            if (found.current_qty < qtyToAdd) return alert(`Not enough stock! Only ${found.current_qty} left.`);
+
+            const existingIndex = selectedItems.findIndex(item => item.id === found.id && item.type === 'Part');
+            if (existingIndex > -1) {
+                selectedItems[existingIndex].qty += qtyToAdd;
+            } else {
+                selectedItems.push({ type, name: found.item_name, price: found.price, id: found.id, qty: qtyToAdd });
+            }
+            found.current_qty -= qtyToAdd; 
+            qtyInput.value = "1";
         }
 
-        found.current_qty -= qtyToAdd; 
-        qtyInput.value = "1"; // Reset quantity box to 1
-    }
+        input.value = ''; 
+        document.getElementById('alt-suggestion-box').innerHTML = ""; 
+        renderDatalists(); 
+        updateSummary(); 
+    };
 
-    input.value = ''; 
-    document.getElementById('alt-suggestion-box').innerHTML = ""; 
-    renderDatalists(); 
-    updateSummary(); 
-};
-
-window.checkAlternatives = (val) => {
-    const suggestionBox = document.getElementById('alt-suggestion-box');
-    
-    if (!val || val.trim() === "") {
-        suggestionBox.innerHTML = "";
-        return;
-    }
-
-    // Clean the input name
-    const typedName = val.split(/\s*\(/)[0].trim().toLowerCase();
-    const currentItem = inventoryData.find(i => i.item_name.trim().toLowerCase() === typedName);
-
-    // If we haven't found the part yet (user still typing), just wait.
-    if (!currentItem) return; 
-
-    // Find other parts with the same OEM ID, but NOT the same unique ID
-    const alternatives = inventoryData.filter(i => 
-        i.oem_ref_id !== null && 
-        i.oem_ref_id === currentItem.oem_ref_id && 
-        i.id !== currentItem.id
-    );
-
-    if (alternatives.length > 0) {
-        const listItems = alternatives.map(a => 
-            `<div style="margin-bottom: 4px;">
-                <b style="color: #27ae60;">${a.item_name}</b> 
-                <span style="color: #888;">(₱${a.price} | Stock: ${a.current_qty})</span>
-            </div>`
-        ).join('');
-        suggestionBox.innerHTML = `<strong>💡 Alternatives found:</strong><br>${listItems}`;
-    } else {
-        // THIS is what you want: explicitly show there's nothing else.
-        suggestionBox.innerHTML = `<span style="color: #e67e22;">ℹ️ No alternatives available for this part.</span>`;
-    }
-};
-
-
-window.updateSummary = () => {
-    const list = document.getElementById('booking-list');
-    let total = 0;
-    list.innerHTML = selectedItems.map((item, index) => {
-        const itemTotal = item.price * item.qty;
-        total += itemTotal;
-        
-        // Displays name + quantity (e.g., Oil Filter x3)
-        const displayLabel = item.type === 'Part' && item.qty > 1 ? `${item.name} <b>x${item.qty}</b>` : item.name;
-
-        return `
-            <li class="summary-item">
-                <span>${displayLabel}</span> 
-                <span>
-                    ₱${itemTotal.toLocaleString()} 
-                    <button onclick="removeItem(${index})" style="background:none; color:red; border:none; cursor:pointer; margin-left:10px;">✕</button>
-                </span>
-            </li>`;
-    }).join('');
-    document.getElementById('total-price').innerText = total.toLocaleString();
-};
-
-window.removeItem = (index) => {
-    const item = selectedItems[index];
-    if (item.type === 'Part') {
-        const found = inventoryData.find(i => i.id === item.id);
-        if (found) found.current_qty += item.qty; // Return full quantity to local stock
-    }
-    selectedItems.splice(index, 1);
-    renderDatalists();
-    updateSummary();
-};
-
-window.finalizeBooking = async () => {
-    if(selectedItems.length === 0) return alert("Select at least one service!");
-    
-    // Flatten the merged items back into individual rows for transaction_details 
-    // This ensures checkout.html sees 3 items if you selected x3
-    const insertData = [];
-    selectedItems.forEach(item => {
-        for(let i = 0; i < item.qty; i++) {
-            insertData.push({
-                plate_number: plate,
-                item_type: item.type,
-                item_name: item.name,
-                price: item.price
-            });
+    window.checkAlternatives = (val) => {
+        const suggestionBox = document.getElementById('alt-suggestion-box');
+        if (!val || val.trim() === "") {
+            suggestionBox.innerHTML = "";
+            return;
         }
-    });
+        const typedName = val.split(/\s*\(/)[0].trim().toLowerCase();
+        const currentItem = inventoryData.find(i => i.item_name.trim().toLowerCase() === typedName);
+        if (!currentItem) return; 
 
-    const { error: transError } = await supabase.from('transaction_details').insert(insertData);
-    if (transError) return alert("Error saving booking: " + transError.message);
+        const alternatives = inventoryData.filter(i => 
+            i.oem_ref_id && i.oem_ref_id === currentItem.oem_ref_id && i.id !== currentItem.id
+        );
 
-    // Update Supabase Stock
-    const partsToUpdate = selectedItems.filter(item => item.type === 'Part');
-    for (const part of partsToUpdate) {
-        const invItem = inventoryData.find(i => i.id === part.id);
-        if (invItem) {
-            await supabase.from('inventory').update({ stock_quantity: invItem.current_qty }).eq('id', part.id);
+        if (alternatives.length > 0) {
+            suggestionBox.innerHTML = `<strong>💡 Alternatives:</strong><br>` + alternatives.map(a => 
+                `<div style="margin-bottom:4px;"><b style="color:#27ae60;">${a.item_name}</b> (₱${a.price} | Stock: ${a.current_qty})</div>`
+            ).join('');
+        } else {
+            suggestionBox.innerHTML = `<span style="color:#e67e22;">ℹ️ No alternatives available.</span>`;
         }
-    }
+    };
 
-    window.location.href = `dashboard.html?plate=${plate}&name=${name}`;
-};
+    window.updateSummary = () => {
+        const list = document.getElementById('booking-list');
+        let total = 0;
+        list.innerHTML = selectedItems.map((item, index) => {
+            const itemTotal = item.price * item.qty;
+            total += itemTotal;
+            const displayLabel = (item.type === 'Part' && item.qty > 1) ? `${item.name} <b>x${item.qty}</b>` : item.name;
+            return `<li class="summary-item"><span>${displayLabel}</span><span>₱${itemTotal.toLocaleString()} <button onclick="removeItem(${index})" style="background:none; color:red; border:none; cursor:pointer; margin-left:10px;">✕</button></span></li>`;
+        }).join('');
+        document.getElementById('total-price').innerText = total.toLocaleString();
+    };
+
+    window.removeItem = (index) => {
+        const item = selectedItems[index];
+        if (item.type === 'Part') {
+            const found = inventoryData.find(i => i.id === item.id);
+            if (found) found.current_qty += item.qty;
+        }
+        selectedItems.splice(index, 1);
+        renderDatalists();
+        updateSummary();
+    };
+
+    window.finalizeBooking = async () => {
+        if(selectedItems.length === 0) return alert("Select at least one item!");
+        const insertData = [];
+        selectedItems.forEach(item => {
+            for(let i = 0; i < item.qty; i++) {
+                insertData.push({ plate_number: plate, item_type: item.type, item_name: item.name, price: item.price });
+            }
+        });
+        const { error: transError } = await supabase.from('transaction_details').insert(insertData);
+        if (transError) return alert("Error: " + transError.message);
+
+        for (const part of selectedItems.filter(item => item.type === 'Part')) {
+            const invItem = inventoryData.find(i => i.id === part.id);
+            if (invItem) await supabase.from('inventory').update({ stock_quantity: invItem.current_qty }).eq('id', part.id);
+        }
+        window.location.href = `dashboard.html?plate=${plate}&name=${name}`;
+    };
+
     loadOptions();
 </script>
 </html>
