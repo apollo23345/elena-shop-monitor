@@ -138,7 +138,8 @@
     } else {
         document.getElementById('display-user-name').innerText = user.first_name + " " + user.last_name;
         if (user.manager_id === null) {
-            document.getElementById('admin-nav').style.display = 'block';
+            const adminNav = document.getElementById('admin-nav');
+            if(adminNav) adminNav.style.display = 'block';
         }
     }
 
@@ -165,6 +166,7 @@
         
         if (srv) serviceData = srv;
         if (inv) {
+            // We create current_qty so we can track "temporary" stock changes before saving
             inventoryData = inv.map(item => ({ ...item, current_qty: item.stock_quantity }));
         }
         renderDatalists();
@@ -183,16 +185,15 @@
     window.addItem = (type) => {
         const inputId = type === 'Service' ? 'service-select-input' : 'part-select-input';
         const input = document.getElementById(inputId);
-        const typedValue = input.value.includes(' (Stock:') ? input.value.split(' (Stock:')[0].trim() : input.value.trim(); 
+        // Clean the input: remove the "(Stock: X)" part if the user clicked the datalist option
+        let typedValue = input.value.split(' (Stock:')[0].trim().toLowerCase(); 
 
         if (type === 'Service') {
-            // Case-insensitive find
-            const found = serviceData.find(s => s.service_name.toLowerCase() === typedValue.toLowerCase());
+            const found = serviceData.find(s => s.service_name.toLowerCase() === typedValue);
             if (!found) return alert("Service not found!");
             selectedItems.push({ type, name: found.service_name, price: found.price, id: found.id });
         } else {
-            // Case-insensitive find
-            const found = inventoryData.find(i => i.item_name.toLowerCase() === typedValue.toLowerCase());
+            const found = inventoryData.find(i => i.item_name.toLowerCase() === typedValue);
             
             if (!found) return alert("Part not found in inventory!");
             if (found.current_qty <= 0) return alert("Part is out of stock!");
@@ -202,7 +203,8 @@
         }
 
         input.value = ''; 
-        document.getElementById('alt-suggestion-box').innerHTML = ""; 
+        const sugBox = document.getElementById('alt-suggestion-box');
+        if(sugBox) sugBox.innerHTML = ""; 
         renderDatalists(); 
         updateSummary(); 
     };
@@ -214,20 +216,17 @@
             return;
         }
 
-        const typedName = val.includes(' (Stock:') ? val.split(' (Stock:')[0].trim() : val.trim();
-        // Case-insensitive find
-        const currentItem = inventoryData.find(i => i.item_name.toLowerCase() === typedName.toLowerCase());
+        const typedName = val.split(' (Stock:')[0].trim().toLowerCase();
+        const currentItem = inventoryData.find(i => i.item_name.toLowerCase() === typedName);
 
-        if (!currentItem) {
+        if (!currentItem || !currentItem.oem_ref_id) {
             suggestionBox.innerHTML = "";
             return;
         }
 
-        // Logic for finding alternatives
         const alternatives = inventoryData.filter(i => 
-            currentItem.oem_ref_id !== null && 
             i.oem_ref_id === currentItem.oem_ref_id && 
-            i.id !== currentItem.id // Better than name check
+            i.id !== currentItem.id
         );
 
         if (alternatives.length > 0) {
