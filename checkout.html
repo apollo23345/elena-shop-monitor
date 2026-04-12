@@ -95,149 +95,126 @@
 
 
 </body>
-    <script type="module">
-        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
-        const supabaseUrl = 'https://yrqtnaxnshkkizradtsd.supabase.co'
-        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlycXRuYXhuc2hra2l6cmFkdHNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3ODY5NTMsImV4cCI6MjA5MTM2Mjk1M30.dBveYrCJ24XIkyx6rc-iVaYkdOBGgsa-wuCV2shr1cY'
-        const supabase = createClient(supabaseUrl, supabaseKey)
+<script type="module">
+    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
+    const supabaseUrl = 'https://yrqtnaxnshkkizradtsd.supabase.co'
+    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlycXRuYXhuc2hra2l6cmFkdHNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3ODY5NTMsImV4cCI6MjA5MTM2Mjk1M30.dBveYrCJ24XIkyx6rc-iVaYkdOBGgsa-wuCV2shr1cY'
+    const supabase = createClient(supabaseUrl, supabaseKey)
 
-        // Identity & Access
-        const user = JSON.parse(localStorage.getItem('currentUser'));
-        if (!user) {
-            window.location.href = 'login.html';
-        } else {
-            document.getElementById('display-user-name').innerText = user.first_name + " " + user.last_name;
-            if (user.manager_id === null) {
-                document.getElementById('admin-nav').style.display = 'block';
-            }
+    // Identity & Access
+    const user = JSON.parse(localStorage.getItem('currentUser'));
+    if (!user) {
+        window.location.href = 'login.html';
+    } else {
+        document.getElementById('display-user-name').innerText = user.first_name + " " + user.last_name;
+        if (user.manager_id === null) {
+            document.getElementById('admin-nav').style.display = 'block';
+        }
+    }
+
+    window.logout = () => {
+        localStorage.removeItem('currentUser');
+        window.location.href = 'login.html';
+    };
+    
+    const urlParams = new URLSearchParams(window.location.search);
+    const plate = urlParams.get('plate');
+    const name = urlParams.get('name'); 
+
+    let currentItems = []; // Global variable to hold items for saving
+
+    async function loadReceipt() {
+        if (!plate) return;
+
+        // 1. Set display info from URL
+        document.getElementById('res-name').innerText = name || "---";
+        document.getElementById('res-plate').innerText = plate;
+        document.getElementById('res-date').innerText = new Date().toLocaleDateString();
+
+        // 2. Fetch transaction details
+        const { data: items, error } = await supabase
+            .from('transaction_details')
+            .select('*')
+            .eq('plate_number', plate);
+
+        if (error) return console.error(error);
+        
+        currentItems = items; // Store for the saveAndFinish function
+        renderTable(items);
+    }
+
+    function renderTable(items) {
+        const tableBody = document.getElementById('items-body');
+        let total = 0;
+        
+        if (!items || items.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="2" style="text-align:center;">No items found</td></tr>';
+            return;
         }
 
-        window.logout = () => {
-            localStorage.removeItem('currentUser');
-            window.location.href = 'login.html';
-        };
+        tableBody.innerHTML = items.map(item => {
+            total += parseFloat(item.price);
+            return `
+                <tr>
+                    <td>${item.item_name} <br><small style="color:#888">${item.item_type}</small></td>
+                    <td style="text-align:right;">₱${parseFloat(item.price).toFixed(2)}</td>
+                </tr>`;
+        }).join('');
         
-const urlParams = new URLSearchParams(window.location.search);
-const plate = urlParams.get('plate');
-const name = urlParams.get('name'); // Get the name from the URL
-
-// Variable to hold items for saving
-let currentItems = [];
-
-async function loadReceipt() {
-    if (!plate) return;
-    document.getElementById('res-name').innerText = name || "---";
-    
-    const { data: items, error } = await supabase
-        .from('transaction_details')
-        .select('*')
-        .eq('plate_number', plate);
-
-    if (error) return console.error(error);
-    currentItems = items; // Store for saving later
-
-    document.getElementById('res-plate').innerText = plate;
-    document.getElementById('res-date').innerText = new Date().toLocaleDateString();
-    
-    renderTable(items);
-}
-
-function renderTable(items) {
-    const tableBody = document.getElementById('items-body');
-    let total = 0;
-    tableBody.innerHTML = items.map(item => {
-        total += parseFloat(item.price);
-        return `
-            <tr>
-                <td>${item.item_name} <br><small style="color:#888">${item.item_type}</small></td>
-                <td style="text-align:right;">₱${parseFloat(item.price).toFixed(2)}</td>
-            </tr>`;
-    }).join('');
-    document.getElementById('grand-total').innerText = total.toFixed(2);
-}
-
-// SAVE TRANSACTION
-window.saveAndFinish = async () => {
-    const total = document.getElementById('grand-total').innerText;
-    
-    const { error } = await supabase.from('transactions').insert([{
-        customer_name: document.getElementById('res-name').innerText,
-        plate_number: plate,
-        total_amount: parseFloat(total),
-        items_json: currentItems // Saves the full list as a snapshot
-    }]);
-
-    if (!error) {
-        // Optional: Delete from transaction_details now that it's "Archived"
-        await supabase.from('transaction_details').delete().eq('plate_number', plate);
-        alert("Transaction Saved Successfully!");
-        window.location.href = 'dashboard.html';
-    } else {
-        alert("Error saving: " + error.message);
-    }
-};
-
-// RETRIEVE PAST TRANSACTION
-window.lookupPastTransaction = async () => {
-    const searchPlate = document.getElementById('search-plate').value.trim().toUpperCase();
-    if (!searchPlate) return;
-
-    const { data, error } = await supabase
-        .from('transactions')
-        .select('*')
-        .eq('plate_number', searchPlate)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-    if (data) {
-        document.getElementById('res-name').innerText = data.customer_name;
-        document.getElementById('res-plate').innerText = data.plate_number;
-        document.getElementById('res-date').innerText = new Date(data.created_at).toLocaleDateString();
-        renderTable(data.items_json);
-        alert("Showing most recent past transaction for " + searchPlate);
-    } else {
-        alert("No past transactions found for this plate.");
-    }
-};
-
-async function loadReceipt() {
-    if (!plate) return;
-
-    // Set the name immediately from the URL
-    if (name) {
-        document.getElementById('res-name').innerText = name;
+        document.getElementById('grand-total').innerText = total.toFixed(2);
     }
 
-    const { data: items, error } = await supabase
-        .from('transaction_details')
-        .select('*')
-        .eq('plate_number', plate);
+    // SAVE TRANSACTION
+    window.saveAndFinish = async () => {
+        const total = document.getElementById('grand-total').innerText;
+        const customerName = document.getElementById('res-name').innerText;
+        
+        if (currentItems.length === 0) {
+            alert("No items to save!");
+            return;
+        }
 
-    if (error) return console.error(error);
+        const { error } = await supabase.from('transactions').insert([{
+            customer_name: customerName,
+            plate_number: plate,
+            total_amount: parseFloat(total),
+            items_json: currentItems 
+        }]);
 
-    document.getElementById('res-plate').innerText = plate;
-    document.getElementById('res-date').innerText = new Date().toLocaleDateString();
-    
-    const tableBody = document.getElementById('items-body');
-    let total = 0;
+        if (!error) {
+            // Delete pending items now that they are finalized in the permanent history
+            await supabase.from('transaction_details').delete().eq('plate_number', plate);
+            alert("Transaction Saved Successfully!");
+            window.location.href = 'dashboard.html';
+        } else {
+            alert("Error saving: " + error.message);
+        }
+    };
 
-    tableBody.innerHTML = items.map(item => {
-        total += parseFloat(item.price);
-        return `
-            <tr>
-                <td>${item.item_name} <br><small style="color:#888">${item.item_type}</small></td>
-                <td style="text-align:right;">₱${parseFloat(item.price).toFixed(2)}</td>
-            </tr>
-        `;
-    }).join('');
+    // RETRIEVE PAST TRANSACTION
+    window.lookupPastTransaction = async () => {
+        const searchPlate = document.getElementById('search-plate').value.trim().toUpperCase();
+        if (!searchPlate) return;
 
-    document.getElementById('grand-total').innerText = total.toFixed(2);
-    
-    // REMOVE the old "const { data: cust } = await supabase..." block 
-    // because we already got the name from the URL!
-}
+        const { data, error } = await supabase
+            .from('transactions')
+            .select('*')
+            .eq('plate_number', searchPlate)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
 
-        loadReceipt();
-    </script>
+        if (data) {
+            document.getElementById('res-name').innerText = data.customer_name;
+            document.getElementById('res-plate').innerText = data.plate_number;
+            document.getElementById('res-date').innerText = new Date(data.created_at).toLocaleDateString();
+            renderTable(data.items_json);
+            alert("Showing most recent past transaction for " + searchPlate);
+        } else {
+            alert("No past transactions found for this plate.");
+        }
+    };
+
+    loadReceipt();
+</script>
 </html>
