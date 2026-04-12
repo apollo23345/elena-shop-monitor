@@ -143,60 +143,106 @@
         document.getElementById('customer-info').innerText = `Booking for: ${name} (${plate})`;
     }
 
-let serviceData = []; // To store full details (id, name, price)
+let serviceData = []; 
 let inventoryData = [];
+let selectedItems = [];
 
 async function loadOptions() {
     const { data: srv } = await supabase.from('services').select('*');
     const { data: inv } = await supabase.from('inventory').select('*');
     
-    if (srv) {
-        serviceData = srv;
-        document.getElementById('service-options').innerHTML = srv.map(s => 
-            `<option value="${s.service_name}">`
-        ).join('');
-    }
+    if (srv) serviceData = srv;
     if (inv) {
-        inventoryData = inv;
-        document.getElementById('part-options').innerHTML = inv.map(i => 
-            `<option value="${i.item_name}">`
-        ).join('');
+        // We map it to track current stock locally as the user adds/removes items
+        inventoryData = inv.map(item => ({ ...item, current_qty: item.quantity }));
     }
+    renderDatalists();
+}
+
+function renderDatalists() {
+    document.getElementById('service-options').innerHTML = serviceData.map(s => 
+        `<option value="${s.service_name}">`
+    ).join('');
+    
+    // Only show parts that have stock > 0
+    document.getElementById('part-options').innerHTML = inventoryData
+        .filter(i => i.current_qty > 0)
+        .map(i => `<option value="${i.item_name} (Stock: ${i.current_qty})">`).join('');
 }
 
 window.addItem = (type) => {
     const inputId = type === 'Service' ? 'service-select-input' : 'part-select-input';
     const input = document.getElementById(inputId);
-    const typedValue = input.value;
-
-    // Find the item in our data arrays to get the price
-    const sourceData = type === 'Service' ? serviceData : inventoryData;
-    const nameField = type === 'Service' ? 'service_name' : 'item_name';
     
-    const foundItem = sourceData.find(item => item[nameField] === typedValue);
+    // 1. Clean the name (removes the "(Stock: X)" part so we can find it in the database)
+    const typedValue = input.value.split(' (Stock:')[0].trim(); 
 
-    if (foundItem) {
-        selectedItems.push({
-            type: type,
-            name: foundItem[nameField],
-            price: parseFloat(foundItem.price)
-        });
-        updateSummary();
-        input.value = ''; // Clear input for next item
+    if (type === 'Service') {
+        const found = serviceData.find(s => s.service_name === typedValue);
+        if (!found) return alert("Service not found!");
+        
+        // 2. Prevent Duplicate Services
+        if (selectedItems.some(item => item.name === found.service_name)) {
+            return alert("This service is already in the summary!");
+        }
+
+        selectedItems.push({ type, name: found.service_name, price: found.price, id: found.id });
     } else {
-        alert("Please select a valid item from the list!");
+        const found = inventoryData.find(i => i.item_name === typedValue);
+        
+        // 3. Stock Check
+        if (!found || found.current_qty <= 0) return alert("Part unavailable or out of stock!");
+
+        // 4. THE ALTERNATIVES LOGIC (What you were asking about)
+        if (found.oem_ref_id) {
+            const alternativePart = inventoryData.find(i => i.id === found.oem_ref_id);
+            if (alternativePart) {
+                alert(`💡 ALTERNATIVE FOUND: You can also use ${alternativePart.item_name} (₱${alternativePart.price})`);
+            }
+        }
+
+        // 5. Reduce Stock & Add to Summary
+        found.current_qty--; 
+        selectedItems.push({ type, name: found.item_name, price: found.price, id: found.id });
     }
+
+    input.value = ''; // Clear the box for the next item
+    renderDatalists(); // Refresh stock counts in the dropdown
+    updateSummary(); // Refresh the Job Summary list
 };
 
-    function updateSummary() {
-        const list = document.getElementById('booking-list');
-        let total = 0;
-        list.innerHTML = selectedItems.map(item => {
-            total += item.price;
-            return `<li class="summary-item"><span>${item.name}</span> <span>₱${item.price}</span></li>`;
-        }).join('');
-        document.getElementById('total-price').innerText = total;
+function updateSummary() {
+    const list = document.getElementById('booking-list');
+    let total = 0;
+    
+    list.innerHTML = selectedItems.map((item, index) => {
+        total += item.price;
+        return `
+            <li class="summary-item">
+                <span>${item.name}</span> 
+                <span>
+                    ₱${item.price} 
+                    <button onclick="removeItem(${index})" style="background:none; color:red; border:none; cursor:pointer; margin-left:10px;">✕</button>
+                </span>
+            </li>`;
+    }).join('');
+    document.getElementById('total-price').innerText = total;
+}
+
+window.removeItem = (index) => {
+    const item = selectedItems[index];
+    
+    // If it's a part, give the stock back!
+    if (item.type === 'Part') {
+        const found = inventoryData.find(i => i.item_name === item.name);
+        if (found) found.current_qty++;
     }
+
+    selectedItems.splice(index, 1); // Remove from the summary list
+    renderDatalists(); // Refresh the dropdowns
+    updateSummary(); // Refresh the summary UI
+};
+
 
     window.finalizeBooking = async () => {
         if(selectedItems.length === 0) return alert("Select at least one service!");
