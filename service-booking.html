@@ -209,21 +209,18 @@
         updateSummary(); 
     };
 
-    window.checkAlternatives = (val) => {
-        const suggestionBox = document.getElementById('alt-suggestion-box');
-        if (!val || val.trim() === "") {
-            suggestionBox.innerHTML = "";
-            return;
-        }
+window.checkAlternatives = (val) => {
+    const suggestionBox = document.getElementById('alt-suggestion-box');
+    const typedName = val.split(' (Stock:')[0].trim().toLowerCase()
+// DEBUG LOG - This will tell us if the match is failing
+    const currentItem = inventoryData.find(i => i.item_name.toLowerCase() === typedName);
+    console.log("Searching for:", typedName, "Found in DB:", currentItem);
 
-        const typedName = val.split(' (Stock:')[0].trim().toLowerCase();
-        const currentItem = inventoryData.find(i => i.item_name.toLowerCase() === typedName);
-
-        if (!currentItem || !currentItem.oem_ref_id) {
-            suggestionBox.innerHTML = "";
-            return;
-        }
-
+// If currentItem exists but has no OEM ID, show a warning
+    if (!currentItem.oem_ref_id) {
+        suggestionBox.innerHTML = "⚠️ This part has no OEM Reference ID in Supabase.";
+        return;
+    }
         const alternatives = inventoryData.filter(i => 
             i.oem_ref_id === currentItem.oem_ref_id && 
             i.id !== currentItem.id
