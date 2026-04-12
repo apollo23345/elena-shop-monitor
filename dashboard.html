@@ -9,12 +9,13 @@
         /* HEADER & NAVBAR */
         header { background: white; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ddd; }
         .logo-area { display: flex; align-items: center; gap: 10px; font-weight: bold; font-size: 1.2em; }
-        .user-area { display: flex; align-items: center; gap: 10px; }
+        .user-area { display: flex; align-items: center; gap: 15px; }
         nav { background: var(--dark); padding: 10px; display: flex; gap: 10px; justify-content: center; }
         nav button { background: transparent; color: white; border: 1px solid white; padding: 8px 15px; cursor: pointer; border-radius: 4px; }
         nav button:hover, nav button.active { background: var(--primary); border-color: var(--primary); }
         .admin-only { display: none; border-color: gold; color: gold; }
         
+        .container { max-width: 600px; margin: 30px auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; padding: 20px; }
         .bay-card { background: white; border-radius: 10px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center; cursor: pointer; border-top: 8px solid #ccc; }
         .bay-card.occupied { border-top-color: var(--danger); }
@@ -52,6 +53,7 @@
         <button id="admin-nav" class="admin-only" onclick="location.href='admin.html'">Admin Control</button>
     </nav>
 
+    <div class="container">
     <div id="pending-alert" style="display:none; background: #fff3cd; padding: 15px; text-align: center; font-weight: bold;">
         ⚠️ Assignment Pending for: <span id="pending-info"></span>. Click an Available Bay to Assign.
     </div>
@@ -68,7 +70,7 @@
             <button onclick="closeModal()" style="background:none; border:none; color:gray; cursor:pointer;">Cancel</button>
         </div>
     </div>
-
+    </div>
     <script type="module">
         // 1. IDENTITY CHECK
 const user = JSON.parse(localStorage.getItem('currentUser'));
