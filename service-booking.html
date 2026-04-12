@@ -186,23 +186,33 @@ window.addItem = (type) => {
     const inputId = type === 'Service' ? 'service-select-input' : 'part-select-input';
     const input = document.getElementById(inputId);
     
-    // Cleanly get the name without stock info
+    // Cleanly get the name
     let typedValue = input.value.split(/\s*\(/)[0].trim().toLowerCase(); 
 
     if (type === 'Service') {
         const found = serviceData.find(s => s.service_name.toLowerCase() === typedValue);
         if (!found) return alert("Service not found!");
+
+        // DUPLICATE CHECK: See if this service name is already in our summary list
+        const isAlreadySelected = selectedItems.some(item => 
+            item.type === 'Service' && item.name.toLowerCase() === typedValue
+        );
+
+        if (isAlreadySelected) {
+            alert("ALREADY ADDED: This service is already in your booking summary!");
+            return; // Exit without clearing the input
+        }
+
         selectedItems.push({ type, name: found.service_name, price: found.price, id: found.id });
     } else {
         const found = inventoryData.find(i => i.item_name.trim().toLowerCase() === typedValue);
         
         if (!found) return alert("Part not found in inventory!");
         
-        // IF OUT OF STOCK: Alert the user and STOP. 
-        // We do NOT clear the input so the alternatives stay visible.
+        // IF OUT OF STOCK: Exit early
         if (found.current_qty <= 0) {
             alert("OUT OF STOCK: You cannot add this part. Check the alternatives still visible in the list below!");
-            return; // Exit here!
+            return; 
         }
 
         // IF IN STOCK: Proceed with adding
@@ -210,7 +220,7 @@ window.addItem = (type) => {
         selectedItems.push({ type, name: found.item_name, price: found.price, id: found.id });
     }
 
-    // Only clear the input if the item was successfully added
+    // Success path: Clear UI and refresh
     input.value = ''; 
     document.getElementById('alt-suggestion-box').innerHTML = ""; 
     renderDatalists(); 
