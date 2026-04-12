@@ -3,13 +3,9 @@
 <head>
     <title>Elena's Shop - Checkout</title>
     <link rel="stylesheet" href="style.css">
+    
     <style>
-/* Inside the <style> tag of the specific page */
-.card select, .card button { 
-    width: 100%; 
-    padding: 10px; 
-    margin-top: 10px; 
-}         
+        /* 2. ONLY PAGE-SPECIFIC STYLE REMAINS */
         .receipt-card { 
             background: white; 
             max-width: 500px; 
@@ -18,7 +14,6 @@
             border-radius: 8px; 
             box-shadow: 0 2px 10px rgba(0,0,0,0.1); 
         }
-        
 
         .header-info { text-align: center; border-bottom: 2px dashed #ddd; padding-bottom: 20px; margin-bottom: 20px; }
         .customer-summary { margin-bottom: 20px; font-size: 0.9em; }
@@ -34,7 +29,7 @@
         .btn-print { background: var(--dark); color: white; }
         .btn-done { background: var(--primary); color: white; }
 
-        /* PRINT LOGIC: Hides everything except the receipt when printing */
+        /* PRINT LOGIC */
         @media print {
             body { background: white; padding: 0; }
             .no-print, header, nav { display: none !important; }
@@ -44,23 +39,23 @@
 </head>
 <body>
     <header>
-    <div class="logo-area">
-        <img src="https://via.placeholder.com/40" alt="Logo"> 
-        ELENA'S AUTO SHOP
-    </div>
-    <div class="user-area">
-        <span id="display-user-name">Employee Name</span>
-        <button onclick="logout()" style="background:#ff4d4d; color:white; border:none; padding:5px 10px; cursor:pointer; border-radius:4px;">Logout</button>
-    </div>
-</header>
+        <div class="logo-area">
+            <img src="https://via.placeholder.com/35" alt="Logo"> 
+            ELENA'S AUTO SHOP
+        </div>
+        <div class="user-area">
+            <span id="display-user-name">Employee Name</span>
+            <button onclick="logout()" style="background:#ff4d4d; color:white; border:none; padding:5px 10px; cursor:pointer; border-radius:4px; margin-left: 10px;">Logout</button>
+        </div>
+    </header>
 
-<nav id="navbar">
-    <button id="nav-dash" onclick="location.href='dashboard.html'">Dashboard</button>
-    <button id="nav-new" onclick="location.href='new-customer.html'">New Customer</button>
-    <button id="nav-book" onclick="location.href='service-booking.html'">Service Booking</button>
-    <button id="nav-check" onclick="location.href='checkout.html'">Check Out</button>
-    <button id="admin-nav" class="admin-only" onclick="location.href='admin.html'">Admin Control</button>
-</nav>
+    <nav id="navbar">
+        <button onclick="location.href='dashboard.html'">Dashboard</button>
+        <button onclick="location.href='new-customer.html'">New Customer</button>
+        <button onclick="location.href='service-booking.html'">Service Booking</button>
+        <button class="active" onclick="location.href='checkout.html'">Check Out</button>
+        <button id="admin-nav" class="admin-only" onclick="location.href='admin.html'">Admin Control</button>
+    </nav>
 
     <div class="receipt-card" id="receipt">
         <div class="header-info">
@@ -81,8 +76,7 @@
                     <th style="text-align:right;">Price</th>
                 </tr>
             </thead>
-            <tbody id="items-body">
-                </tbody>
+            <tbody id="items-body"></tbody>
         </table>
 
         <div class="total-row">
@@ -95,53 +89,46 @@
         <button class="btn btn-done" onclick="location.href='dashboard.html'">Finalize & Close</button>
     </div>
 
+
 </body>
     <script type="module">
-        // 1. IDENTITY CHECK
-        const user = JSON.parse(localStorage.getItem('currentUser'));
-        if (!user) {
-       window.location.href = 'login.html';
-        } else {
-        document.getElementById('display-user-name').innerText = user.first_name + " " + user.last_name;
-       // Show Admin button only if manager_id is null
-      if (user.manager_id === null) {
-        document.getElementById('admin-nav').style.display = 'block';
-        }
-    }
-
-    // 2. LOGOUT FUNCTION
-    window.logout = () => {
-        localStorage.removeItem('currentUser');
-        window.location.href = 'login.html';
-    };
-        
         import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
         const supabaseUrl = 'https://yrqtnaxnshkkizradtsd.supabase.co'
         const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlycXRuYXhuc2hra2l6cmFkdHNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3ODY5NTMsImV4cCI6MjA5MTM2Mjk1M30.dBveYrCJ24XIkyx6rc-iVaYkdOBGgsa-wuCV2shr1cY'
         const supabase = createClient(supabaseUrl, supabaseKey)
 
+        // Identity & Access
+        const user = JSON.parse(localStorage.getItem('currentUser'));
+        if (!user) {
+            window.location.href = 'login.html';
+        } else {
+            document.getElementById('display-user-name').innerText = user.first_name + " " + user.last_name;
+            if (user.manager_id === null) {
+                document.getElementById('admin-nav').style.display = 'block';
+            }
+        }
+
+        window.logout = () => {
+            localStorage.removeItem('currentUser');
+            window.location.href = 'login.html';
+        };
+        
         const urlParams = new URLSearchParams(window.location.search);
         const plate = urlParams.get('plate');
 
         async function loadReceipt() {
             if (!plate) return;
 
-            // 1. Get Transaction Items
             const { data: items, error } = await supabase
                 .from('transaction_details')
                 .select('*')
                 .eq('plate_number', plate);
 
-            if (error) {
-                console.error(error);
-                return;
-            }
+            if (error) return console.error(error);
 
-            // 2. Display basic info
             document.getElementById('res-plate').innerText = plate;
             document.getElementById('res-date').innerText = new Date().toLocaleDateString();
             
-            // 3. Populate Table and Calculate Total
             const tableBody = document.getElementById('items-body');
             let total = 0;
 
@@ -157,12 +144,10 @@
 
             document.getElementById('grand-total').innerText = total.toFixed(2);
             
-            // Optional: Get Customer name from 'customer' table if needed
             const { data: cust } = await supabase.from('bays').select('current_customer').eq('current_plate', plate).maybeSingle();
             if(cust) document.getElementById('res-name').innerText = cust.current_customer;
         }
 
         loadReceipt();
     </script>
-
 </html>
