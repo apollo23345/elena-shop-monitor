@@ -293,34 +293,32 @@ window.checkAlternatives = (val) => {
     };
 
 window.finalizeBooking = async () => {
-    if(selectedItems.length === 0) return alert("Select at least one service!");
-    
-// Inside finalizeBooking, when mapping items for insertion:
-const insertData = selectedItems.map(item => ({
-    plate_number: plate,
-    item_type: item.type, // 'Service' or 'Part'
-    item_name: item.name,
-    price: item.price,
-    qty: item.quantity || 1 // Now this matches your new column!
-}));
+    if (selectedItems.length === 0) return alert("Select at least one service!");
 
-const { error } = await supabase.from('transaction_details').insert(insertData);
-    
+    // 1. Prepare data for insertion
+    const insertData = selectedItems.map(item => ({
+        plate_number: plate,
+        item_type: item.type, // 'Service' or 'Part'
+        item_name: item.name,
+        price: item.price,
+        qty: item.quantity || 1 // This matches your new DB column 'qty'
+    }));
+
+    // 2. Insert into Supabase
+    // Note: I changed the variable name below to 'transError' to match your 'if' check
+    const { error: transError } = await supabase.from('transaction_details').insert(insertData);
+
     if (transError) {
         alert("Error saving booking: " + transError.message);
         return;
     }
 
     // 3. PERMANENTLY UPDATE INVENTORY STOCK
-    // We only care about items that are "Part" type
     const partsToUpdate = selectedItems.filter(item => item.type === 'Part');
 
     for (const part of partsToUpdate) {
-        // Find the current inventory record for this part
         const invItem = inventoryData.find(i => i.id === part.id);
-        
         if (invItem) {
-            // Update Supabase with the NEW quantity (the one we tracked in current_qty)
             const { error: invError } = await supabase
                 .from('inventory')
                 .update({ stock_quantity: invItem.current_qty })
@@ -330,10 +328,9 @@ const { error } = await supabase.from('transaction_details').insert(insertData);
         }
     }
 
-    // 4. Everything worked, go to dashboard
-    window.location.href = `dashboard.html?plate=${plate}&name=${name}`;
+    // 4. Success! Redirect
+    window.location.href = `dashboard.html?plate=${plate}&name=${encodeURIComponent(name)}`;
 };
-
     loadOptions();
 </script>
 </html>
