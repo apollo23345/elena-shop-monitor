@@ -113,12 +113,12 @@
 window.cancelPendingTransaction = async () => {
     if (confirm("Discard this booking? Inventory items will be returned to stock.")) {
         
-        // 1. Get all items for this plate to see what needs to be returned
-        const { data: items, error: fetchError } = await supabase
-            .from('transaction_details')
-            .select('item_name, quantity, type')
-            .eq('plate_number', plate);
-
+// Change this line in dashboard.html
+const { data: items, error: fetchError } = await supabase
+    .from('transaction_details')
+    .select('item_name, qty, item_type') // Use 'qty' and 'item_type'
+    .eq('plate_number', plate);
+    
         if (fetchError) {
             alert("Error fetching pending items: " + fetchError.message);
             return;

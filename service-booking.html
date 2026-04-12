@@ -295,16 +295,16 @@ window.checkAlternatives = (val) => {
 window.finalizeBooking = async () => {
     if(selectedItems.length === 0) return alert("Select at least one service!");
     
-    // 1. Prepare transaction details
-    const insertData = selectedItems.map(item => ({
-        plate_number: plate,
-        item_type: item.type,
-        item_name: item.name,
-        price: item.price
-    }));
+// Inside finalizeBooking, when mapping items for insertion:
+const insertData = selectedItems.map(item => ({
+    plate_number: plate,
+    item_type: item.type, // 'Service' or 'Part'
+    item_name: item.name,
+    price: item.price,
+    qty: item.quantity || 1 // Now this matches your new column!
+}));
 
-    // 2. Insert into transactions
-    const { error: transError } = await supabase.from('transaction_details').insert(insertData);
+const { error } = await supabase.from('transaction_details').insert(insertData);
     
     if (transError) {
         alert("Error saving booking: " + transError.message);
