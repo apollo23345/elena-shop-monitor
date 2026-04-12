@@ -2,37 +2,8 @@
 <html>
 <head>
     <title>Elena's Shop - Dashboard</title>
+<link rel="stylesheet" href="style.css">
     <style>
-    :root { --primary: #3ecf8e; --danger: #ff4d4d; --dark: #2f2f2f; --light: #f4f4f4; }
-    body { font-family: sans-serif; margin: 0; background: var(--light); }
-    
-    /* THIN HEADER STYLE */
-    header { 
-        background: white; 
-        padding: 5px 20px; /* Reduced vertical padding from 10px to 5px */
-        display: flex; 
-        justify-content: space-between; 
-        align-items: center; 
-        border-bottom: 1px solid #ddd; 
-    }
-    .logo-area { display: flex; align-items: center; gap: 10px; font-weight: bold; font-size: 1.1em; }
-    .user-area { display: flex; align-items: center; gap: 15px; white-space: nowrap; }
-    #display-user-name { font-weight: 500; color: var(--dark); }
-
-    /* THIN NAV & BUTTONS (Matching New-Customer) */
-    nav { background: var(--dark); padding: 8px; display: flex; gap: 10px; justify-content: center; }
-    nav button { 
-        background: transparent; 
-        color: white; 
-        border: 1px solid #555; 
-        padding: 6px 12px; /* Smaller padding for thinner buttons */
-        cursor: pointer; 
-        border-radius: 4px; 
-        font-size: 0.9em;
-    }
-    nav button:hover, nav button.active { background: var(--primary); border-color: var(--primary); color: white; }
-    .admin-only { display: none; border-color: gold; color: gold; }
-
     /* DASHBOARD CONTENT */
     /* Remove the .container wrapper around the grid so it can breathe */
     .dashboard-grid { 
