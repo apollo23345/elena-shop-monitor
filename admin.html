@@ -156,28 +156,36 @@
 </table>
         </div>
 
-        <div id="tab-inventory" class="tab-content">
-            <h3>Manage Inventory</h3>
-            <div class="form-inline">
-                <input type="text" id="inv-name" placeholder="Item Name">
-                <input type="number" id="inv-price" placeholder="Price (₱)">
-                <button class="btn-add" onclick="addItem('inventory')">Add Item</button>
-            </div>
-            <div class="search-container">
-    <strong>Search:</strong>
-    <input type="text" id="inv-search" placeholder="Search inventory..." onkeyup="filterInventory()">
+<div id="tab-inventory" class="tab-content">
+    <h3>Manage Inventory</h3>
+    <div class="form-inline">
+        <input type="text" id="inv-name" placeholder="Item Name">
+        <input type="number" id="inv-price" placeholder="Price (₱)">
+        <input type="number" id="inv-qty" placeholder="Qty">
+        <input list="alt-items" id="inv-alt-search" placeholder="Search Alternative for OEM..." oninput="syncOEMRef(this, 'add')">
+        <datalist id="alt-items"></datalist>
+        <input type="hidden" id="inv-oem-id"> <button class="btn-add" onclick="addItem('inventory')">Add Item</button>
+    </div>
+
+    <div class="search-container">
+        <strong>Search:</strong>
+        <input type="text" id="inv-search" placeholder="Search inventory..." onkeyup="filterInventory()">
+    </div>
+
+    <table id="table-inventory">
+        <thead>
+            <tr>
+                <th>Item Name</th>
+                <th>Price (₱)</th>
+                <th>Quantity</th>
+                <th>OEM Ref ID</th>
+                <th>Alternative Search</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
 </div>
-<table id="table-inventory">
-    <thead>
-        <tr>
-            <th>Item Name</th>
-            <th>Price (₱)</th>
-            <th>Action</th>
-        </tr>
-    </thead>
-    <tbody></tbody>
-</table>
-        </div>
     </div>
 
 </body>
@@ -238,6 +246,28 @@
             renderInventoryTable(data);
         }
     }
+    // --- NEW: OEM SEARCH LOGIC ---
+
+// Updates the datalist options and syncs the OEM ID
+window.syncOEMRef = (inputElement, type, rowId = null) => {
+    const val = inputElement.value;
+    // Find the item in our local array that matches the typed name
+    const match = allInventory.find(item => item.item_name === val);
+    
+    if (match) {
+        if (type === 'add') {
+            document.getElementById('inv-oem-id').value = match.oem_ref_id || match.id;
+        } else {
+            document.getElementById(`edit-inv-oem-${rowId}`).value = match.oem_ref_id || match.id;
+        }
+    }
+};
+
+// Populate the datalist for the dropdown effect
+function updateInventoryDatalist() {
+    const dl = document.getElementById('alt-items');
+    dl.innerHTML = allInventory.map(i => `<option value="${i.item_name}">`).join('');
+}
 
     // --- RENDER FUNCTIONS ---
     function renderMechanicsTable(data) {
@@ -297,13 +327,20 @@ window.saveService = async (id) => {
 window.saveInventory = async (id) => {
     const name = document.getElementById(`edit-inv-name-${id}`).value;
     const price = document.getElementById(`edit-inv-price-${id}`).value;
+    const qty = document.getElementById(`edit-inv-qty-${id}`).value;
+    const oem = document.getElementById(`edit-inv-oem-${id}`).value;
 
     const { error } = await supabase
         .from('inventory')
-        .update({ item_name: name, price: price })
+        .update({ 
+            item_name: name, 
+            price: price, 
+            stock_quantity: qty,
+            oem_ref_id: oem 
+        })
         .eq('id', id);
 
-    if (error) alert("Error updating inventory: " + error.message);
+    if (error) alert(error.message);
     else {
         alert("Inventory updated!");
         loadData('inventory');
@@ -311,11 +348,18 @@ window.saveInventory = async (id) => {
 };
 
 function renderInventoryTable(data) {
+    updateInventoryDatalist(); // Ensure dropdown is fresh
     const tbody = document.querySelector(`#table-inventory tbody`);
     tbody.innerHTML = data.map(i => `
         <tr>
             <td><input type="text" class="edit-input" id="edit-inv-name-${i.id}" value="${i.item_name}"></td>
             <td><input type="number" class="edit-input" id="edit-inv-price-${i.id}" value="${i.price}"></td>
+            <td><input type="number" class="edit-input" id="edit-inv-qty-${i.id}" value="${i.stock_quantity || 0}"></td>
+            <td><input type="text" class="edit-input" id="edit-inv-oem-${i.id}" value="${i.oem_ref_id || ''}" readonly style="background:#f0f0f0"></td>
+            <td>
+                <input list="alt-items" class="edit-input" placeholder="Find Alt..." 
+                    oninput="syncOEMRef(this, 'edit', ${i.id})">
+            </td>
             <td>
                 <button class="btn-save" onclick="saveInventory(${i.id})">Update</button>
                 <button class="btn-del" onclick="deleteItem('inventory', ${i.id})">Del</button>
@@ -352,33 +396,28 @@ function renderInventoryTable(data) {
     }
 
     // --- ACTION FUNCTIONS ---
-    window.addItem = async (table) => {
-        let payload = {};
-        if (table === 'mechanics') {
-            payload = { 
-                first_name: document.getElementById('mech-first').value,
-                last_name: document.getElementById('mech-last').value,
-                contact: document.getElementById('mech-contact').value,
-                status: 'Available'
-            };
-        }
-        if (table === 'services') payload = { service_name: document.getElementById('srv-name').value, price: document.getElementById('srv-price').value };
-        if (table === 'inventory') payload = { item_name: document.getElementById('inv-name').value, price: document.getElementById('inv-price').value };
-
-        const { error } = await supabase.from(table).insert([payload]);
+const originalAddItem = window.addItem;
+window.addItem = async (table) => {
+    if (table === 'inventory') {
+        const payload = {
+            item_name: document.getElementById('inv-name').value,
+            price: document.getElementById('inv-price').value,
+            stock_quantity: document.getElementById('inv-qty').value,
+            oem_ref_id: document.getElementById('inv-oem-id').value || null
+        };
+        const { error } = await supabase.from('inventory').insert([payload]);
         if (!error) {
-            // Clear inputs
-            if (table === 'mechanics') {
-                document.getElementById('mech-first').value = '';
-                document.getElementById('mech-last').value = '';
-                document.getElementById('mech-contact').value = '';
-            }
-            else if (table === 'services') { document.getElementById('srv-name').value = ''; document.getElementById('srv-price').value = ''; }
-            else { document.getElementById('inv-name').value = ''; document.getElementById('inv-price').value = ''; }
-            loadData(table);
+            document.getElementById('inv-name').value = '';
+            document.getElementById('inv-price').value = '';
+            document.getElementById('inv-qty').value = '';
+            document.getElementById('inv-alt-search').value = '';
+            document.getElementById('inv-oem-id').value = '';
+            loadData('inventory');
         } else alert(error.message);
+    } else {
+        originalAddItem(table);
     }
-
+};
     window.deleteItem = async (table, id) => {
         if(confirm("Are you sure?")) {
             const { error } = await supabase.from(table).delete().eq('id', id);
