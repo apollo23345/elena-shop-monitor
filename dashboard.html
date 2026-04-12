@@ -179,21 +179,30 @@
         }
     };
 
-    window.confirmAssignment = async () => {
-        const mechId = document.getElementById('mech-select').value;
-        if(!mechId) { alert("Please select a mechanic"); return; }
+window.confirmAssignment = async () => {
+    const mechId = document.getElementById('mech-select').value;
+    if(!mechId) { alert("Please select a mechanic"); return; }
 
-        await supabase.from('bays').update({ 
-            status: 'Occupied', 
-            current_plate: plate, 
-            current_customer: name,
-            current_mechanic_id: mechId 
-        }).eq('id', selectedBayId);
+    // 1. Update Bay
+    const { error: bayError } = await supabase.from('bays').update({ 
+        status: 'Occupied', 
+        current_plate: plate, 
+        current_customer: name,
+        current_mechanic_id: mechId 
+    }).eq('id', selectedBayId);
 
-        await supabase.from('mechanics').update({ status: 'Busy' }).eq('id', mechId);
+    if (bayError) {
+        console.error("Bay Update Error:", bayError);
+        alert("Failed to update bay: " + bayError.message);
+        return;
+    }
 
-        window.location.href = 'dashboard.html';
-    };
+    // 2. Update Mechanic
+    await supabase.from('mechanics').update({ status: 'Busy' }).eq('id', mechId);
+
+    // 3. Refresh
+    window.location.href = 'dashboard.html';
+};
 
     window.releaseBay = async (id) => {
         if(!confirm("Are you sure this job is finished?")) return;
