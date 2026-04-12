@@ -96,14 +96,14 @@
     
     <hr>
     
-    <label>Type/Select Parts/Inventory</label>
-    <div style="display: flex; gap: 5px;">
-        <input list="part-options" id="part-select-input" oninput="window.checkAlternatives(this.value)" placeholder="Search part..." style="flex: 3;">
-        <input type="number" id="part-qty-input" value="1" min="1" style="flex: 1;" placeholder="Qty">
-    </div>
+<label>Type/Select Parts/Inventory</label>
+<div style="display: flex; gap: 5px;">
+    <input list="part-options" id="part-select-input" oninput="window.checkAlternatives(this.value)" placeholder="Search part..." style="flex: 3;">
+    <input type="number" id="part-qty-input" value="1" min="1" style="flex: 1;" placeholder="Qty">
+</div>
+<datalist id="part-options"></datalist>
 
-    <button onclick="addItem('Part')">Add Part</button>
-
+<button onclick="addItem('Part')">Add Part</button>
     <div id="alt-suggestion-box" style="font-size: 0.85em; color: #555; margin-top: 10px; font-style: italic; max-height: 120px; overflow-y: auto; border-left: 3px solid #2ecc71; padding-left: 10px;"></div>
 </div>
 
@@ -166,13 +166,21 @@
     }
 
 function renderDatalists() {
-    document.getElementById('service-options').innerHTML = serviceData.map(s => 
-        `<option value="${s.service_name}">`
-    ).join('');
+    // Fill Service dropdown
+    const srvList = document.getElementById('service-options');
+    if (srvList) {
+        srvList.innerHTML = serviceData.map(s => 
+            `<option value="${s.service_name}">`
+        ).join('');
+    }
     
-    // REMOVE the .filter here so 0 stock items appear in the dropdown
-    document.getElementById('part-options').innerHTML = inventoryData
-        .map(i => `<option value="${i.item_name} (Stock: ${i.current_qty})">`).join('');
+    // Fill Part dropdown
+    const partList = document.getElementById('part-options');
+    if (partList) {
+        partList.innerHTML = inventoryData.map(i => 
+            `<option value="${i.item_name} (Stock: ${i.current_qty})">`
+        ).join('');
+    }
 }
 
 window.addItem = (type) => {
