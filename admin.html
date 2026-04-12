@@ -139,6 +139,11 @@
                 <input type="number" id="srv-price" placeholder="Price (₱)">
                 <button class="btn-add" onclick="addItem('services')">Add Service</button>
             </div>
+
+            <div class="search-container">
+    <strong>Search:</strong>
+    <input type="text" id="srv-search" placeholder="Search services..." onkeyup="filterServices()">
+</div>
             <table id="table-services">
                 <thead><tr><th>Service</th><th>Price</th><th>Action</th></tr></thead>
                 <tbody></tbody>
@@ -152,6 +157,10 @@
                 <input type="number" id="inv-price" placeholder="Price (₱)">
                 <button class="btn-add" onclick="addItem('inventory')">Add Item</button>
             </div>
+            <div class="search-container">
+    <strong>Search:</strong>
+    <input type="text" id="inv-search" placeholder="Search inventory..." onkeyup="filterInventory()">
+</div>
             <table id="table-inventory">
                 <thead><tr><th>Item</th><th>Price</th><th>Action</th></tr></thead>
                 <tbody></tbody>
@@ -159,140 +168,185 @@
         </div>
     </div>
 
-    <script type="module">
-        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
-        const supabaseUrl = 'https://yrqtnaxnshkkizradtsd.supabase.co'
-        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlycXRuYXhuc2hra2l6cmFkdHNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3ODY5NTMsImV4cCI6MjA5MTM2Mjk1M30.dBveYrCJ24XIkyx6rc-iVaYkdOBGgsa-wuCV2shr1cY'
-        const supabase = createClient(supabaseUrl, supabaseKey)
-
-        let allMechanics = [];
-
-        // Security Check
-        const user = JSON.parse(localStorage.getItem('currentUser'));
-        if (!user || user.manager_id !== null) {
-            alert("Access Denied: Admins Only");
-            window.location.href = 'dashboard.html';
-        } else {
-            document.getElementById('display-user-name').innerText = user.first_name + " " + user.last_name + " (Admin)";
-            loadData('mechanics');
-        }
-
-        window.logout = () => {
-            localStorage.removeItem('currentUser');
-            window.location.href = 'login.html';
-        };
-
-        window.showTab = (tabName) => {
-            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.admin-nav button').forEach(b => b.classList.remove('active-tab'));
-            document.getElementById('tab-' + tabName).classList.add('active');
-            
-            const btnId = tabName === 'mechanics' ? 'btn-mech' : tabName === 'services' ? 'btn-srv' : 'btn-inv';
-            document.getElementById(btnId).classList.add('active-tab');
-            loadData(tabName);
-        }
-
-        window.addItem = async (table) => {
-            let payload = {};
-            if (table === 'mechanics') {
-                payload = { 
-                    first_name: document.getElementById('mech-first').value,
-                    last_name: document.getElementById('mech-last').value,
-                    contact: document.getElementById('mech-contact').value,
-                    status: 'Available'
-                };
-            }
-            if (table === 'services') payload = { service_name: document.getElementById('srv-name').value, price: document.getElementById('srv-price').value };
-            if (table === 'inventory') payload = { item_name: document.getElementById('inv-name').value, price: document.getElementById('inv-price').value };
-
-            const { error } = await supabase.from(table).insert([payload]);
-            if (!error) {
-                // Clear inputs
-                if (table === 'mechanics') {
-                    document.getElementById('mech-first').value = '';
-                    document.getElementById('mech-last').value = '';
-                    document.getElementById('mech-contact').value = '';
-                }
-                else if (table === 'services') { document.getElementById('srv-name').value = ''; document.getElementById('srv-price').value = ''; }
-                else { document.getElementById('inv-name').value = ''; document.getElementById('inv-price').value = ''; }
-                loadData(table);
-            } else alert(error.message);
-        }
-
-        // Inline Save for Mechanics
-        window.saveMechanic = async (id) => {
-            const first = document.getElementById(`edit-first-${id}`).value;
-            const last = document.getElementById(`edit-last-${id}`).value;
-            const contact = document.getElementById(`edit-contact-${id}`).value;
-            const status = document.getElementById(`edit-status-${id}`).value;
-
-            const { error } = await supabase
-                .from('mechanics')
-                .update({ first_name: first, last_name: last, contact: contact, status: status })
-                .eq('id', id);
-
-            if (error) alert(error.message);
-            else loadData('mechanics');
-        };
-
-        window.deleteItem = async (table, id) => {
-            if(confirm("Are you sure?")) {
-                const { error } = await supabase.from(table).delete().eq('id', id);
-                if (error) alert(error.message);
-                loadData(table);
-            }
-        }
-
-        async function loadData(table) {
-            const { data, error } = await supabase.from(table).select('*').order('id');
-            if (error) return console.error(error);
-
-            const tbody = document.querySelector(`#table-${table} tbody`);
-            
-            if (table === 'mechanics') {
-                allMechanics = data;
-                renderMechanicsTable(data);
-            } else {
-                tbody.innerHTML = data.map(item => `
-                    <tr>
-                        <td>${item.service_name || item.item_name}</td>
-                        <td>₱${parseFloat(item.price).toFixed(2)}</td>
-                        <td><button class="btn-del" onclick="deleteItem('${table}', ${item.id})">Delete</button></td>
-                    </tr>
-                `).join('');
-            }
-        }
-
-        function renderMechanicsTable(data) {
-            const tbody = document.querySelector(`#table-mechanics tbody`);
-            tbody.innerHTML = data.map(m => `
-                <tr>
-                    <td><input type="text" class="edit-input" id="edit-first-${m.id}" value="${m.first_name}"></td>
-                    <td><input type="text" class="edit-input" id="edit-last-${m.id}" value="${m.last_name}"></td>
-                    <td><input type="text" class="edit-input" id="edit-contact-${m.id}" value="${m.contact || ''}"></td>
-                    <td>
-                        <select id="edit-status-${m.id}">
-                            <option value="Available" ${m.status === 'Available' ? 'selected' : ''}>Available</option>
-                            <option value="Busy" ${m.status === 'Busy' ? 'selected' : ''}>Busy</option>
-                            <option value="Off-duty" ${m.status === 'Off-duty' ? 'selected' : ''}>Off-duty</option>
-                        </select>
-                    </td>
-                    <td>
-                        <button class="btn-save" onclick="saveMechanic(${m.id})">Update</button>
-                        <button class="btn-del" onclick="deleteItem('mechanics', ${m.id})">Del</button>
-                    </td>
-                </tr>
-            `).join('');
-        }
-
-        window.filterMechanics = () => {
-            const query = document.getElementById('mech-search').value.toLowerCase();
-            const filtered = allMechanics.filter(m => 
-                m.first_name.toLowerCase().includes(query) || 
-                m.last_name.toLowerCase().includes(query)
-            );
-            renderMechanicsTable(filtered);
-        }
-    </script>
 </body>
+<script type="module">
+    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
+    const supabaseUrl = 'https://yrqtnaxnshkkizradtsd.supabase.co'
+    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlycXRuYXhuc2hra2l6cmFkdHNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3ODY5NTMsImV4cCI6MjA5MTM2Mjk1M30.dBveYrCJ24XIkyx6rc-iVaYkdOBGgsa-wuCV2shr1cY'
+    const supabase = createClient(supabaseUrl, supabaseKey)
+
+    // Data Storage for Filtering
+    let allMechanics = [];
+    let allServices = [];
+    let allInventory = [];
+
+    // Security & Init
+    const user = JSON.parse(localStorage.getItem('currentUser'));
+    if (!user || user.manager_id !== null) {
+        alert("Access Denied: Admins Only");
+        window.location.href = 'dashboard.html';
+    } else {
+        document.getElementById('display-user-name').innerText = user.first_name + " " + user.last_name + " (Admin)";
+        loadData('mechanics');
+    }
+
+    window.logout = () => {
+        localStorage.removeItem('currentUser');
+        window.location.href = 'login.html';
+    };
+
+    window.showTab = (tabName) => {
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.admin-nav button').forEach(b => b.classList.remove('active-tab'));
+        document.getElementById('tab-' + tabName).classList.add('active');
+        
+        const btnId = tabName === 'mechanics' ? 'btn-mech' : tabName === 'services' ? 'btn-srv' : 'btn-inv';
+        document.getElementById(btnId).classList.add('active-tab');
+        
+        // Clear search inputs when switching tabs
+        if(document.getElementById('mech-search')) document.getElementById('mech-search').value = '';
+        if(document.getElementById('srv-search')) document.getElementById('srv-search').value = '';
+        if(document.getElementById('inv-search')) document.getElementById('inv-search').value = '';
+        
+        loadData(tabName);
+    }
+
+    async function loadData(table) {
+        const { data, error } = await supabase.from(table).select('*').order('id');
+        if (error) return console.error(error);
+
+        if (table === 'mechanics') {
+            allMechanics = data;
+            renderMechanicsTable(data);
+        } else if (table === 'services') {
+            allServices = data;
+            renderServicesTable(data);
+        } else if (table === 'inventory') {
+            allInventory = data;
+            renderInventoryTable(data);
+        }
+    }
+
+    // --- RENDER FUNCTIONS ---
+    function renderMechanicsTable(data) {
+        const tbody = document.querySelector(`#table-mechanics tbody`);
+        tbody.innerHTML = data.map(m => `
+            <tr>
+                <td><input type="text" class="edit-input" id="edit-first-${m.id}" value="${m.first_name}"></td>
+                <td><input type="text" class="edit-input" id="edit-last-${m.id}" value="${m.last_name}"></td>
+                <td><input type="text" class="edit-input" id="edit-contact-${m.id}" value="${m.contact || ''}"></td>
+                <td>
+                    <select id="edit-status-${m.id}">
+                        <option value="Available" ${m.status === 'Available' ? 'selected' : ''}>Available</option>
+                        <option value="Busy" ${m.status === 'Busy' ? 'selected' : ''}>Busy</option>
+                        <option value="Off-duty" ${m.status === 'Off-duty' ? 'selected' : ''}>Off-duty</option>
+                    </select>
+                </td>
+                <td>
+                    <button class="btn-save" onclick="saveMechanic(${m.id})">Update</button>
+                    <button class="btn-del" onclick="deleteItem('mechanics', ${m.id})">Del</button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    function renderServicesTable(data) {
+        const tbody = document.querySelector(`#table-services tbody`);
+        tbody.innerHTML = data.map(item => `
+            <tr>
+                <td>${item.service_name}</td>
+                <td>₱${parseFloat(item.price).toFixed(2)}</td>
+                <td><button class="btn-del" onclick="deleteItem('services', ${item.id})">Delete</button></td>
+            </tr>
+        `).join('');
+    }
+
+    function renderInventoryTable(data) {
+        const tbody = document.querySelector(`#table-inventory tbody`);
+        tbody.innerHTML = data.map(item => `
+            <tr>
+                <td>${item.item_name}</td>
+                <td>₱${parseFloat(item.price).toFixed(2)}</td>
+                <td><button class="btn-del" onclick="deleteItem('inventory', ${item.id})">Delete</button></td>
+            </tr>
+        `).join('');
+    }
+
+    // --- FILTER FUNCTIONS ---
+    window.filterMechanics = () => {
+        const query = document.getElementById('mech-search').value.toLowerCase();
+        const filtered = allMechanics.filter(m => 
+            m.first_name.toLowerCase().includes(query) || 
+            m.last_name.toLowerCase().includes(query)
+        );
+        renderMechanicsTable(filtered);
+    }
+
+    window.filterServices = () => {
+        const query = document.getElementById('srv-search').value.toLowerCase();
+        const filtered = allServices.filter(s => 
+            s.service_name.toLowerCase().includes(query)
+        );
+        renderServicesTable(filtered);
+    }
+
+    window.filterInventory = () => {
+        const query = document.getElementById('inv-search').value.toLowerCase();
+        const filtered = allInventory.filter(i => 
+            i.item_name.toLowerCase().includes(query)
+        );
+        renderInventoryTable(filtered);
+    }
+
+    // --- ACTION FUNCTIONS ---
+    window.addItem = async (table) => {
+        let payload = {};
+        if (table === 'mechanics') {
+            payload = { 
+                first_name: document.getElementById('mech-first').value,
+                last_name: document.getElementById('mech-last').value,
+                contact: document.getElementById('mech-contact').value,
+                status: 'Available'
+            };
+        }
+        if (table === 'services') payload = { service_name: document.getElementById('srv-name').value, price: document.getElementById('srv-price').value };
+        if (table === 'inventory') payload = { item_name: document.getElementById('inv-name').value, price: document.getElementById('inv-price').value };
+
+        const { error } = await supabase.from(table).insert([payload]);
+        if (!error) {
+            // Clear inputs
+            if (table === 'mechanics') {
+                document.getElementById('mech-first').value = '';
+                document.getElementById('mech-last').value = '';
+                document.getElementById('mech-contact').value = '';
+            }
+            else if (table === 'services') { document.getElementById('srv-name').value = ''; document.getElementById('srv-price').value = ''; }
+            else { document.getElementById('inv-name').value = ''; document.getElementById('inv-price').value = ''; }
+            loadData(table);
+        } else alert(error.message);
+    }
+
+    window.deleteItem = async (table, id) => {
+        if(confirm("Are you sure?")) {
+            const { error } = await supabase.from(table).delete().eq('id', id);
+            if (error) alert(error.message);
+            loadData(table);
+        }
+    }
+
+    window.saveMechanic = async (id) => {
+        const first = document.getElementById(`edit-first-${id}`).value;
+        const last = document.getElementById(`edit-last-${id}`).value;
+        const contact = document.getElementById(`edit-contact-${id}`).value;
+        const status = document.getElementById(`edit-status-${id}`).value;
+
+        const { error } = await supabase
+            .from('mechanics')
+            .update({ first_name: first, last_name: last, contact: contact, status: status })
+            .eq('id', id);
+
+        if (error) alert(error.message);
+        else loadData('mechanics');
+    };
+</script>
 </html>
