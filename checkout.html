@@ -57,6 +57,14 @@
         <button id="admin-nav" class="admin-only" onclick="location.href='admin.html'">Admin Control</button>
     </nav>
 
+    <div class="no-print" style="margin-bottom: 20px;">
+    <input type="text" id="search-plate" placeholder="Enter Plate to Retrieve..." style="padding: 10px; border-radius: 4px; border: 1px solid #ccc;">
+    <button class="btn" onclick="lookupPastTransaction()" style="background: var(--dark); color:white;">Retrieve History</button>
+</div><div class="no-print" style="margin-bottom: 20px;">
+    <input type="text" id="search-plate" placeholder="Enter Plate to Retrieve..." style="padding: 10px; border-radius: 4px; border: 1px solid #ccc;">
+    <button class="btn" onclick="lookupPastTransaction()" style="background: var(--dark); color:white;">Retrieve History</button>
+</div>
+
     <div class="receipt-card" id="receipt">
         <div class="header-info">
             <h2 style="margin:0;">ELENA'S AUTO SHOP</h2>
@@ -86,7 +94,7 @@
 
     <div class="no-print">
         <button class="btn btn-print" onclick="window.print()">Print Receipt</button>
-        <button class="btn btn-done" onclick="location.href='dashboard.html'">Finalize & Close</button>
+<button class="btn btn-done" onclick="saveAndFinish()">Finalize & Save Transaction</button>
     </div>
 
 
@@ -116,6 +124,86 @@
 const urlParams = new URLSearchParams(window.location.search);
 const plate = urlParams.get('plate');
 const name = urlParams.get('name'); // Get the name from the URL
+
+// Variable to hold items for saving
+let currentItems = [];
+
+async function loadReceipt() {
+    if (!plate) return;
+    document.getElementById('res-name').innerText = name || "---";
+    
+    const { data: items, error } = await supabase
+        .from('transaction_details')
+        .select('*')
+        .eq('plate_number', plate);
+
+    if (error) return console.error(error);
+    currentItems = items; // Store for saving later
+
+    document.getElementById('res-plate').innerText = plate;
+    document.getElementById('res-date').innerText = new Date().toLocaleDateString();
+    
+    renderTable(items);
+}
+
+function renderTable(items) {
+    const tableBody = document.getElementById('items-body');
+    let total = 0;
+    tableBody.innerHTML = items.map(item => {
+        total += parseFloat(item.price);
+        return `
+            <tr>
+                <td>${item.item_name} <br><small style="color:#888">${item.item_type}</small></td>
+                <td style="text-align:right;">₱${parseFloat(item.price).toFixed(2)}</td>
+            </tr>`;
+    }).join('');
+    document.getElementById('grand-total').innerText = total.toFixed(2);
+}
+
+// SAVE TRANSACTION
+window.saveAndFinish = async () => {
+    const total = document.getElementById('grand-total').innerText;
+    
+    const { error } = await supabase.from('transactions').insert([{
+        customer_name: document.getElementById('res-name').innerText,
+        plate_number: plate,
+        total_amount: parseFloat(total),
+        items_json: currentItems // Saves the full list as a snapshot
+    }]);
+
+    if (!error) {
+        // Optional: Delete from transaction_details now that it's "Archived"
+        await supabase.from('transaction_details').delete().eq('plate_number', plate);
+        alert("Transaction Saved Successfully!");
+        window.location.href = 'dashboard.html';
+    } else {
+        alert("Error saving: " + error.message);
+    }
+};
+
+// RETRIEVE PAST TRANSACTION
+window.lookupPastTransaction = async () => {
+    const searchPlate = document.getElementById('search-plate').value.trim().toUpperCase();
+    if (!searchPlate) return;
+
+    const { data, error } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('plate_number', searchPlate)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+    if (data) {
+        document.getElementById('res-name').innerText = data.customer_name;
+        document.getElementById('res-plate').innerText = data.plate_number;
+        document.getElementById('res-date').innerText = new Date(data.created_at).toLocaleDateString();
+        renderTable(data.items_json);
+        alert("Showing most recent past transaction for " + searchPlate);
+    } else {
+        alert("No past transactions found for this plate.");
+    }
+};
 
 async function loadReceipt() {
     if (!plate) return;
