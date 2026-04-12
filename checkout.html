@@ -135,9 +135,9 @@
         renderTable(currentItems);
     }
 
-    function renderTable(items) {
+function renderTable(items) {
         const tableBody = document.getElementById('items-body');
-        let total = 0;
+        let grandTotal = 0;
         
         if (!items || items.length === 0) {
             tableBody.innerHTML = '<tr><td colspan="2" style="text-align:center;">No items found</td></tr>';
@@ -145,18 +145,40 @@
             return;
         }
 
-        tableBody.innerHTML = items.map(item => {
-            total += parseFloat(item.price);
+        // 1. GROUP THE ITEMS
+        const grouped = items.reduce((acc, item) => {
+            if (!acc[item.item_name]) {
+                acc[item.item_name] = {
+                    name: item.item_name,
+                    type: item.item_type,
+                    price: parseFloat(item.price),
+                    qty: 0
+                };
+            }
+            acc[item.item_name].qty += 1;
+            return acc;
+        }, {});
+
+        // 2. CONVERT GROUPED OBJECT TO HTML ROWS
+        tableBody.innerHTML = Object.values(grouped).map(item => {
+            const itemSubtotal = item.price * item.qty;
+            grandTotal += itemSubtotal;
+
+            // Only show "x2", "x3" if quantity is more than 1
+            const qtyLabel = item.qty > 1 ? ` <b style="color:var(--primary)">x${item.qty}</b>` : '';
+
             return `
                 <tr>
-                    <td>${item.item_name} <br><small style="color:#888">${item.item_type}</small></td>
-                    <td style="text-align:right;">₱${parseFloat(item.price).toFixed(2)}</td>
+                    <td>
+                        ${item.name}${qtyLabel}
+                        <br><small style="color:#888">${item.type}</small>
+                    </td>
+                    <td style="text-align:right;">₱${itemSubtotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                 </tr>`;
         }).join('');
         
-        document.getElementById('grand-total').innerText = total.toFixed(2);
+        document.getElementById('grand-total').innerText = grandTotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
     }
-
     window.saveAndFinish = async () => {
         const total = document.getElementById('grand-total').innerText;
         const customerName = document.getElementById('res-name').innerText;
