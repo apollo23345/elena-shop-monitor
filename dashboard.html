@@ -150,12 +150,28 @@
             window.location.href = 'dashboard.html';
         };
 
-        window.releaseBay = async (id) => {
-            const { data: bay } = await supabase.from('bays').select('current_plate').eq('id', id).single();
-            await supabase.from('bays').update({ status: 'Available', current_plate: null, current_customer: null }).eq('id', id);
-            // Navigate to Checkout with the plate
-            window.location.href = `checkout.html?plate=${bay.current_plate}`;
-        };
+window.releaseBay = async (id) => {
+    // 1. Get the current info BEFORE clearing it
+    const { data: bay } = await supabase
+        .from('bays')
+        .select('current_plate, current_customer')
+        .eq('id', id)
+        .single();
+
+    if (!bay) return;
+
+    // 2. Clear the bay in the database
+    await supabase.from('bays')
+        .update({ 
+            status: 'Available', 
+            current_plate: null, 
+            current_customer: null 
+        })
+        .eq('id', id);
+
+    // 3. Send BOTH plate and name to checkout
+    window.location.href = `checkout.html?plate=${bay.current_plate}&name=${encodeURIComponent(bay.current_customer)}`;
+};
 
         window.closeModal = () => document.getElementById('modal').style.display = 'none';
         loadDashboard();

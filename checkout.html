@@ -113,40 +113,46 @@
             window.location.href = 'login.html';
         };
         
-        const urlParams = new URLSearchParams(window.location.search);
-        const plate = urlParams.get('plate');
+const urlParams = new URLSearchParams(window.location.search);
+const plate = urlParams.get('plate');
+const name = urlParams.get('name'); // Get the name from the URL
 
-        async function loadReceipt() {
-            if (!plate) return;
+async function loadReceipt() {
+    if (!plate) return;
 
-            const { data: items, error } = await supabase
-                .from('transaction_details')
-                .select('*')
-                .eq('plate_number', plate);
+    // Set the name immediately from the URL
+    if (name) {
+        document.getElementById('res-name').innerText = name;
+    }
 
-            if (error) return console.error(error);
+    const { data: items, error } = await supabase
+        .from('transaction_details')
+        .select('*')
+        .eq('plate_number', plate);
 
-            document.getElementById('res-plate').innerText = plate;
-            document.getElementById('res-date').innerText = new Date().toLocaleDateString();
-            
-            const tableBody = document.getElementById('items-body');
-            let total = 0;
+    if (error) return console.error(error);
 
-            tableBody.innerHTML = items.map(item => {
-                total += parseFloat(item.price);
-                return `
-                    <tr>
-                        <td>${item.item_name} <br><small style="color:#888">${item.item_type}</small></td>
-                        <td style="text-align:right;">₱${parseFloat(item.price).toFixed(2)}</td>
-                    </tr>
-                `;
-            }).join('');
+    document.getElementById('res-plate').innerText = plate;
+    document.getElementById('res-date').innerText = new Date().toLocaleDateString();
+    
+    const tableBody = document.getElementById('items-body');
+    let total = 0;
 
-            document.getElementById('grand-total').innerText = total.toFixed(2);
-            
-            const { data: cust } = await supabase.from('bays').select('current_customer').eq('current_plate', plate).maybeSingle();
-            if(cust) document.getElementById('res-name').innerText = cust.current_customer;
-        }
+    tableBody.innerHTML = items.map(item => {
+        total += parseFloat(item.price);
+        return `
+            <tr>
+                <td>${item.item_name} <br><small style="color:#888">${item.item_type}</small></td>
+                <td style="text-align:right;">₱${parseFloat(item.price).toFixed(2)}</td>
+            </tr>
+        `;
+    }).join('');
+
+    document.getElementById('grand-total').innerText = total.toFixed(2);
+    
+    // REMOVE the old "const { data: cust } = await supabase..." block 
+    // because we already got the name from the URL!
+}
 
         loadReceipt();
     </script>
