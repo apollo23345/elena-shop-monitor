@@ -97,11 +97,12 @@
         <button class="active" id="admin-nav-btn" onclick="location.href='admin.html'">Admin Control</button>
     </nav>
 
-    <div class="admin-nav">
-        <button id="btn-mech" class="active-tab" onclick="showTab('mechanics')">Mechanics</button>
-        <button id="btn-srv" onclick="showTab('services')">Services</button>
-        <button id="btn-inv" onclick="showTab('inventory')">Inventory</button>
-    </div>
+<div class="admin-nav">
+    <button id="btn-mech" class="active-tab" onclick="showTab('mechanics')">Mechanics</button>
+    <button id="btn-srv" onclick="showTab('services')">Services</button>
+    <button id="btn-inv" onclick="showTab('inventory')">Inventory</button>
+    <button id="btn-receipts" onclick="showTab('receipts')">Receipts</button> 
+</div>
 
     <div class="container">
         <div id="tab-mechanics" class="tab-content active">
@@ -187,6 +188,25 @@
         <tbody></tbody>
     </table>
 </div>
+<div id="tab-receipts" class="tab-content">
+    <h3>Transaction History / Receipts</h3>
+    <div class="search-container">
+        <strong>Search Plate/Name:</strong>
+        <input type="text" id="receipt-search" placeholder="Enter Plate or Name..." onkeyup="filterReceipts()">
+    </div>
+    <table id="table-receipts">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Customer / Plate</th>
+                <th>Total</th>
+                <th>Items Sold</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</div>
     </div>
 
 </body>
@@ -216,37 +236,104 @@
         window.location.href = 'login.html';
     };
 
-    window.showTab = (tabName) => {
-        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-        document.querySelectorAll('.admin-nav button').forEach(b => b.classList.remove('active-tab'));
-        document.getElementById('tab-' + tabName).classList.add('active');
-        
-        const btnId = tabName === 'mechanics' ? 'btn-mech' : tabName === 'services' ? 'btn-srv' : 'btn-inv';
-        document.getElementById(btnId).classList.add('active-tab');
-        
-        // Clear search inputs when switching tabs
-        if(document.getElementById('mech-search')) document.getElementById('mech-search').value = '';
-        if(document.getElementById('srv-search')) document.getElementById('srv-search').value = '';
-        if(document.getElementById('inv-search')) document.getElementById('inv-search').value = '';
-        
-        loadData(tabName);
-    }
+let allReceipts = []; // Add this to your top-level variables
 
-    async function loadData(table) {
-        const { data, error } = await supabase.from(table).select('*').order('id');
-        if (error) return console.error(error);
+window.showTab = (tabName) => {
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.admin-nav button').forEach(b => b.classList.remove('active-tab'));
+    document.getElementById('tab-' + tabName).classList.add('active');
+    
+    // Updated button selection logic
+    const btnId = 'btn-' + (tabName === 'mechanics' ? 'mech' : tabName === 'services' ? 'srv' : tabName === 'inventory' ? 'inv' : 'receipts');
+    document.getElementById(btnId).classList.add('active-tab');
+    
+    loadData(tabName);
+}
 
-        if (table === 'mechanics') {
-            allMechanics = data;
-            renderMechanicsTable(data);
-        } else if (table === 'services') {
-            allServices = data;
-            renderServicesTable(data);
-        } else if (table === 'inventory') {
-            allInventory = data;
-            renderInventoryTable(data);
+async function loadData(table) {
+    const { data, error } = await supabase.from(table).select('*').order('created_at', { ascending: false });
+    if (error) return console.error(error);
+
+    if (table === 'mechanics') { allMechanics = data; renderMechanicsTable(data); }
+    else if (table === 'services') { allServices = data; renderServicesTable(data); }
+    else if (table === 'inventory') { allInventory = data; renderInventoryTable(data); }
+    else if (table === 'transactions') { allReceipts = data; renderReceiptsTable(data); } // Handle receipts
+}
+
+// Map 'receipts' tab name to the 'transactions' table in DB
+const originalLoadData = loadData;
+window.loadData = (table) => {
+    if (table === 'receipts') loadData('transactions');
+    else originalLoadData(table);
+}
+function renderReceiptsTable(data) {
+    const tbody = document.querySelector(`#table-receipts tbody`);
+    tbody.innerHTML = data.map(r => {
+        const date = new Date(r.created_at).toLocaleDateString();
+        // Create a string of items for preview
+        const itemPreview = r.items_json.map(i => `${i.item_name}`).join(', ');
+        
+        return `
+            <tr>
+                <td>${date}</td>
+                <td><strong>${r.customer_name}</strong><br><small>${r.plate_number}</small></td>
+                <td>₱${parseFloat(r.total_amount).toFixed(2)}</td>
+                <td style="font-size: 0.85em; color: #666;">${itemPreview}</td>
+                <td>
+                    <button class="btn-del" onclick="handleRefund(${r.id})">Void / Refund</button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+window.filterReceipts = () => {
+    const query = document.getElementById('receipt-search').value.toLowerCase();
+    const filtered = allReceipts.filter(r => 
+        r.customer_name.toLowerCase().includes(query) || 
+        r.plate_number.toLowerCase().includes(query)
+    );
+    renderReceiptsTable(filtered);
+}
+
+window.handleRefund = async (id) => {
+    const transaction = allReceipts.find(r => r.id === id);
+    if (!transaction) return;
+
+    if (confirm(`Void transaction for ${transaction.customer_name}?`)) {
+        const isReturned = confirm("Are the items being returned to physical inventory? \n\n(OK = Yes, add qty back. Cancel = No, unusable/broken.)");
+
+        if (isReturned) {
+            // Loop through items in the JSON and update inventory
+            for (const item of transaction.items_json) {
+                if (item.item_type === 'Part') {
+                    // Fetch current qty
+                    const { data: invItem } = await supabase
+                        .from('inventory')
+                        .select('stock_quantity')
+                        .eq('item_name', item.item_name)
+                        .single();
+
+                    if (invItem) {
+                        const newQty = (invItem.stock_quantity || 0) + 1;
+                        await supabase
+                            .from('inventory')
+                            .update({ stock_quantity: newQty })
+                            .eq('item_name', item.item_name);
+                    }
+                }
+            }
+            alert("Inventory restocked and transaction voided.");
+        } else {
+            alert("Transaction voided. Inventory remains unchanged.");
         }
+
+        // Delete the transaction record
+        const { error } = await supabase.from('transactions').delete().eq('id', id);
+        if (error) alert(error.message);
+        loadData('transactions');
     }
+};s
     // --- NEW: OEM SEARCH LOGIC ---
 
 // Updates the datalist options and syncs the OEM ID
