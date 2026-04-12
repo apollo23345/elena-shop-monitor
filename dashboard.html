@@ -54,7 +54,7 @@
     </nav>
 
     <div class="container">
-    <div id="pending-alert" style="display:none; background: #fff3cd; padding: 15px; text-align: center; font-weight: bold;">
+        <div id="pending-alert" style="display:none; background: #fff3cd; padding: 15px; text-align: center; font-weight: bold;">
         ⚠️ Assignment Pending for: <span id="pending-info"></span>. Click an Available Bay to Assign.
     </div>
 
@@ -72,24 +72,21 @@
     </div>
     </div>
     <script type="module">
-        // 1. IDENTITY CHECK
-const user = JSON.parse(localStorage.getItem('currentUser'));
-if (!user) {
-    window.location.href = 'login.html';
-} else {
-    document.getElementById('display-user-name').innerText = user.first_name + " " + user.last_name;
-    // Show Admin button only if manager_id is null
-    if (user.manager_id === null) {
-        document.getElementById('admin-nav').style.display = 'block';
-    }
-}
-
-// 2. LOGOUT FUNCTION
-window.logout = () => {
-    localStorage.removeItem('currentUser');
-    window.location.href = 'login.html';
-};
-
+        // HEADER SCRIPTS
+        // 1. IDENTITY CHECK (Who is logged in?)
+        const user = JSON.parse(localStorage.getItem('currentUser'));
+        if (!user) {
+            window.location.href = 'login.html'; // Kick back to login if not logged in
+        } else {
+            document.getElementById('display-user-name').innerText = user.first_name + " " + user.last_name;
+            if (user.manager_id === null) {
+                document.getElementById('admin-nav').style.display = 'block';
+            }
+        }
+        window.logout = () => {
+            localStorage.removeItem('currentUser');
+            window.location.href = 'login.html';
+        };=-    
 
         import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
         const supabaseUrl = 'https://yrqtnaxnshkkizradtsd.supabase.co'

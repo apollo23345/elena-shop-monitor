@@ -79,6 +79,7 @@
         const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlycXRuYXhuc2hra2l6cmFkdHNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3ODY5NTMsImV4cCI6MjA5MTM2Mjk1M30.dBveYrCJ24XIkyx6rc-iVaYkdOBGgsa-wuCV2shr1cY'
         const supabase = createClient(supabaseUrl, supabaseKey)
 
+        // HEADER SCRIPTS
         // 1. IDENTITY CHECK (Who is logged in?)
         const user = JSON.parse(localStorage.getItem('currentUser'));
         if (!user) {
@@ -89,6 +90,10 @@
                 document.getElementById('admin-nav').style.display = 'block';
             }
         }
+        window.logout = () => {
+            localStorage.removeItem('currentUser');
+            window.location.href = 'login.html';
+        };
 
         // 2. REGISTRATION LOGIC
         document.getElementById('regBtn').onclick = async () => {
@@ -131,10 +136,6 @@
             }
         };
 
-        window.logout = () => {
-            localStorage.removeItem('currentUser');
-            window.location.href = 'login.html';
-        };
     </script>
 </body>
 </html>
