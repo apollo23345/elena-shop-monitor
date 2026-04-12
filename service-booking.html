@@ -185,7 +185,9 @@
 window.addItem = (type) => {
     const inputId = type === 'Service' ? 'service-select-input' : 'part-select-input';
     const input = document.getElementById(inputId);
-    const typedValue = input.value.split(' (Stock:')[0].trim(); 
+    
+    // CLEAN THE INPUT: Again, ensure we get just the name "Mitsubishi Tire"
+    const typedValue = input.value.includes(' (Stock:') ? input.value.split(' (Stock:')[0].trim() : input.value.trim(); 
 
     if (type === 'Service') {
         const found = serviceData.find(s => s.service_name === typedValue);
@@ -194,17 +196,16 @@ window.addItem = (type) => {
     } else {
         const found = inventoryData.find(i => i.item_name === typedValue);
         
-        // Ensure the item can be added even if oem_ref_id is null or only points to itself
-        if (!found || found.current_qty <= 0) {
-            return alert("Part unavailable or out of stock!");
-        }
+        if (!found) return alert("Part not found in inventory!");
+        if (found.current_qty <= 0) return alert("Part is out of stock!");
 
         found.current_qty--; 
         selectedItems.push({ type, name: found.item_name, price: found.price, id: found.id });
     }
 
+    // Reset UI
     input.value = ''; 
-    document.getElementById('alt-suggestion-box').innerHTML = ""; // Clear suggestions after adding
+    document.getElementById('alt-suggestion-box').innerHTML = ""; 
     renderDatalists(); 
     updateSummary(); 
 };
@@ -236,18 +237,18 @@ window.checkAlternatives = (val) => {
         return;
     }
 
-    const typedName = val.split(' (Stock:')[0].trim();
+    // CLEAN THE INPUT: Strip out the "(Stock: XX)" part to find the real name
+    const typedName = val.includes(' (Stock:') ? val.split(' (Stock:')[0].trim() : val.trim();
     const currentItem = inventoryData.find(i => i.item_name === typedName);
 
-    // If item isn't in our inventory list yet, clear and wait
     if (!currentItem) {
         suggestionBox.innerHTML = "";
         return;
     }
 
-    // Logic for finding group alternatives
+    // Logic for finding group alternatives (Items with same oem_ref_id but different names)
     const alternatives = inventoryData.filter(i => 
-        currentItem.oem_ref_id !== null && // Only search if the item has a group
+        currentItem.oem_ref_id !== null && 
         i.oem_ref_id === currentItem.oem_ref_id && 
         i.item_name !== currentItem.item_name
     );
@@ -262,10 +263,10 @@ window.checkAlternatives = (val) => {
         
         suggestionBox.innerHTML = `<strong>💡 Alternatives found:</strong><br>${listItems}`;
     } else {
-        // This explicitly handles your tires or any part without a group
-        suggestionBox.innerHTML = `<span style="color: #999;">ℹ️ No alternatives available for this part.</span>`;
+        // This will now correctly trigger for your Mitsubishi Tire (OEM ID: 2)
+        suggestionBox.innerHTML = `<span style="color: #e67e22;">ℹ️ No alternatives available for this part.</span>`;
     }
-}; 
+};
 
     window.removeItem = (index) => {
         const item = selectedItems[index];
