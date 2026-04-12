@@ -44,13 +44,13 @@
     </div>
 </header>
 
-<nav id="navbar">
-    <button id="nav-dash" onclick="location.href='dashboard.html'">Dashboard</button>
-    <button id="nav-new" onclick="location.href='new-customer.html'">New Customer</button>
-    <button id="nav-book" onclick="location.href='service-booking.html'">Service Booking</button>
-    <button id="nav-check" onclick="location.href='checkout.html'">Check Out</button>
-    <button id="admin-nav" class="admin-only" onclick="location.href='admin.html'">Admin Control</button>
-</nav>
+    <nav id="navbar">
+        <button class="active" onclick="location.href='dashboard.html'">Dashboard</button>
+        <button onclick="location.href='new-customer.html'">New Customer</button>
+        <button onclick="location.href='service-booking.html'">Service Booking</button>
+        <button onclick="location.href='checkout.html'">Check Out</button>
+        <button id="admin-nav" class="admin-only" onclick="location.href='admin.html'">Admin Control</button>
+    </nav>
 
     <div id="pending-alert" style="display:none; background: #fff3cd; padding: 15px; text-align: center; font-weight: bold;">
         ⚠️ Assignment Pending for: <span id="pending-info"></span>. Click an Available Bay to Assign.
@@ -88,12 +88,6 @@ window.logout = () => {
     window.location.href = 'login.html';
 };
 
-// 3. HIGHLIGHT CURRENT PAGE
-const currentPage = window.location.pathname.split("/").pop();
-if(currentPage === 'dashboard.html') document.getElementById('nav-dash').classList.add('active');
-if(currentPage === 'new-customer.html') document.getElementById('nav-cust').classList.add('active');
-if(currentPage === 'service-booking.html') document.getElementById('nav-book').classList.add('active');
-if(currentPage === 'checkout.html') document.getElementById('nav-check').classList.add('active');
 
         import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
         const supabaseUrl = 'https://yrqtnaxnshkkizradtsd.supabase.co'
