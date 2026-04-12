@@ -186,7 +186,7 @@ window.addItem = (type) => {
     const inputId = type === 'Service' ? 'service-select-input' : 'part-select-input';
     const input = document.getElementById(inputId);
     
-    // Use Regex to strip "(Stock: X)" properly even if spacing varies
+    // Cleanly get the name without stock info
     let typedValue = input.value.split(/\s*\(/)[0].trim().toLowerCase(); 
 
     if (type === 'Service') {
@@ -198,18 +198,21 @@ window.addItem = (type) => {
         
         if (!found) return alert("Part not found in inventory!");
         
-        // Check stock AFTER finding it so checkAlternatives can still work
+        // IF OUT OF STOCK: Alert the user and STOP. 
+        // We do NOT clear the input so the alternatives stay visible.
         if (found.current_qty <= 0) {
-            return alert("OUT OF STOCK: You cannot add this to the job summary, but you can see alternatives below.");
+            alert("OUT OF STOCK: You cannot add this part. Check the alternatives still visible in the list below!");
+            return; // Exit here!
         }
 
+        // IF IN STOCK: Proceed with adding
         found.current_qty--; 
         selectedItems.push({ type, name: found.item_name, price: found.price, id: found.id });
     }
 
+    // Only clear the input if the item was successfully added
     input.value = ''; 
-    // Notice: We don't clear the alt-suggestion-box here 
-    // so the staff can still read the alternatives after the alert pops up.
+    document.getElementById('alt-suggestion-box').innerHTML = ""; 
     renderDatalists(); 
     updateSummary(); 
 };
@@ -223,7 +226,7 @@ window.checkAlternatives = (val) => {
     }
 
     // Clean the input name
-    const typedName = val.split(' (Stock:')[0].trim().toLowerCase();
+    const typedName = val.split(/\s*\(/)[0].trim().toLowerCase();
     const currentItem = inventoryData.find(i => i.item_name.trim().toLowerCase() === typedName);
 
     // If we haven't found the part yet (user still typing), just wait.
