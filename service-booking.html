@@ -181,60 +181,56 @@
             .map(i => `<option value="${i.item_name} (Stock: ${i.current_qty})">`).join('');
     }
 
-    window.addItem = (type) => {
-        const inputId = type === 'Service' ? 'service-select-input' : 'part-select-input';
-        const input = document.getElementById(inputId);
-        // Clean the input: remove the "(Stock: X)" part if the user clicked the datalist option
-        let typedValue = input.value.split(' (Stock:')[0].trim().toLowerCase(); 
+window.addItem = (type) => {
+    const inputId = type === 'Service' ? 'service-select-input' : 'part-select-input';
+    const input = document.getElementById(inputId);
+    let typedValue = input.value.split(' (Stock:')[0].trim().toLowerCase(); 
 
-        if (type === 'Service') {
-            const found = serviceData.find(s => s.service_name.toLowerCase() === typedValue);
-            if (!found) return alert("Service not found!");
-            selectedItems.push({ type, name: found.service_name, price: found.price, id: found.id });
-        } else {
-            const found = inventoryData.find(i => i.item_name.toLowerCase() === typedValue);
-            
-            if (!found) return alert("Part not found in inventory!");
-            if (found.current_qty <= 0) return alert("Part is out of stock!");
-
-            found.current_qty--; 
-            selectedItems.push({ type, name: found.item_name, price: found.price, id: found.id });
+    if (type === 'Service') {
+        const found = serviceData.find(s => s.service_name.toLowerCase() === typedValue);
+        if (!found) return alert("Service not found!");
+        selectedItems.push({ type, name: found.service_name, price: found.price, id: found.id });
+    } else {
+        const found = inventoryData.find(i => i.item_name.trim().toLowerCase() === typedValue);
+        
+        // Scenario 1: Part doesn't exist
+        if (!found) return alert("Part not found in inventory!");
+        
+        // Scenario 2: "Too bad, no buy" (Out of stock)
+        if (found.current_qty <= 0) {
+            return alert("Out of stock! You cannot add this part.");
         }
 
-        input.value = ''; 
-        const sugBox = document.getElementById('alt-suggestion-box');
-        if(sugBox) sugBox.innerHTML = ""; 
-        renderDatalists(); 
-        updateSummary(); 
-    };
+        // Scenario 3: Has stock, proceed to "Buy"
+        found.current_qty--; 
+        selectedItems.push({ type, name: found.item_name, price: found.price, id: found.id });
+    }
+
+    // Reset UI
+    input.value = ''; 
+    document.getElementById('alt-suggestion-box').innerHTML = ""; 
+    renderDatalists(); 
+    updateSummary(); 
+};
 
 window.checkAlternatives = (val) => {
     const suggestionBox = document.getElementById('alt-suggestion-box');
     
-    // 1. If the input is empty, clear the box and STOP
     if (!val || val.trim() === "") {
         suggestionBox.innerHTML = "";
         return;
     }
 
+    // Clean the input name
     const typedName = val.split(' (Stock:')[0].trim().toLowerCase();
-    const currentItem = inventoryData.find(i => i.item_name.toLowerCase() === typedName);
+    const currentItem = inventoryData.find(i => i.item_name.trim().toLowerCase() === typedName);
 
-    // 2. THE CRITICAL FIX: If we didn't find a match in the DB yet, STOP here.
-    // This prevents the "reading oem_ref_id of undefined" error.
-    if (!currentItem) {
-        suggestionBox.innerHTML = ""; // Keep it clean while user is still typing
-        return; 
-    }
+    // If we haven't found the part yet (user still typing), just wait.
+    if (!currentItem) return; 
 
-    // 3. Now it is safe to check oem_ref_id because we know currentItem exists
-    if (currentItem.oem_ref_id === null) {
-        suggestionBox.innerHTML = `<span style="color: #e67e22;">ℹ️ No alternative group assigned to this part.</span>`;
-        return;
-    }
-
-    // 4. Look for others in the same group
+    // Find other parts with the same OEM ID, but NOT the same unique ID
     const alternatives = inventoryData.filter(i => 
+        i.oem_ref_id !== null && 
         i.oem_ref_id === currentItem.oem_ref_id && 
         i.id !== currentItem.id
     );
@@ -248,6 +244,7 @@ window.checkAlternatives = (val) => {
         ).join('');
         suggestionBox.innerHTML = `<strong>💡 Alternatives found:</strong><br>${listItems}`;
     } else {
+        // THIS is what you want: explicitly show there's nothing else.
         suggestionBox.innerHTML = `<span style="color: #e67e22;">ℹ️ No alternatives available for this part.</span>`;
     }
 };
