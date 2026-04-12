@@ -238,16 +238,22 @@
 
 let allReceipts = []; // Add this to your top-level variables
 
+// This ensures that clicking the 'Receipts' tab fetches from the 'transactions' table
 window.showTab = (tabName) => {
     document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.admin-nav button').forEach(b => b.classList.remove('active-tab'));
     document.getElementById('tab-' + tabName).classList.add('active');
     
-    // Updated button selection logic
     const btnId = 'btn-' + (tabName === 'mechanics' ? 'mech' : tabName === 'services' ? 'srv' : tabName === 'inventory' ? 'inv' : 'receipts');
-    document.getElementById(btnId).classList.add('active-tab');
+    const targetBtn = document.getElementById(btnId);
+    if (targetBtn) targetBtn.classList.add('active-tab');
     
-    loadData(tabName);
+    // CRITICAL FIX: Redirect 'receipts' to the actual 'transactions' table
+    if (tabName === 'receipts') {
+        loadData('transactions');
+    } else {
+        loadData(tabName);
+    }
 }
 
 async function loadData(table) {
@@ -268,19 +274,22 @@ window.loadData = (table) => {
 }
 function renderReceiptsTable(data) {
     const tbody = document.querySelector(`#table-receipts tbody`);
+    if (!tbody) return; // Safety check
+    
     tbody.innerHTML = data.map(r => {
         const date = new Date(r.created_at).toLocaleDateString();
-        // Create a string of items for preview
-        const itemPreview = r.items_json.map(i => `${i.item_name}`).join(', ');
+        // Check if items_json exists and is an array before mapping
+        const items = Array.isArray(r.items_json) ? r.items_json : [];
+        const itemPreview = items.map(i => i.item_name).join(', ');
         
         return `
             <tr>
                 <td>${date}</td>
                 <td><strong>${r.customer_name}</strong><br><small>${r.plate_number}</small></td>
-                <td>₱${parseFloat(r.total_amount).toFixed(2)}</td>
+                <td>₱${parseFloat(r.total_amount || 0).toFixed(2)}</td>
                 <td style="font-size: 0.85em; color: #666;">${itemPreview}</td>
                 <td>
-                    <button class="btn-del" onclick="handleRefund(${r.id})">Void / Refund</button>
+                    <button class="btn-del" onclick="handleRefund('${r.id}')">Void / Refund</button>
                 </td>
             </tr>
         `;
@@ -333,7 +342,7 @@ window.handleRefund = async (id) => {
         if (error) alert(error.message);
         loadData('transactions');
     }
-};s
+};
     // --- NEW: OEM SEARCH LOGIC ---
 
 // Updates the datalist options and syncs the OEM ID
