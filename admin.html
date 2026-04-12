@@ -259,12 +259,16 @@
         }
     }
 
-    async function loadData(table) {
-        const { data, error } = await supabase.from(table).select('*').order('created_at', { ascending: false });
-        if (error) return console.error("Error fetching " + table, error);
+// In loadData(table)
+async function loadData(table) {
+    // When the tab calls 'services', we redirect to the 'service' table
+    const targetTable = table === 'services' ? 'service' : table; 
+    const { data, error } = await supabase.from(targetTable).select('*').order('created_at', { ascending: false });
+    
+    if (error) return console.error("Error fetching " + targetTable, error);
 
-        if (table === 'mechanics') { allMechanics = data; renderMechanicsTable(data); }
-        else if (table === 'services') { allServices = data; renderServicesTable(data); }
+    if (table === 'mechanics') { allMechanics = data; renderMechanicsTable(data); }
+    else if (table === 'services') { allServices = data; renderServicesTable(data); } // allServices now holds 'service' data
         else if (table === 'inventory') { allInventory = data; renderInventoryTable(data); }
         else if (table === 'transactions') { allReceipts = data; renderReceiptsTable(data); }
     }
@@ -326,20 +330,20 @@
         `).join('');
     }
 
-    function renderServicesTable(data) {
-        const tbody = document.querySelector(`#table-services tbody`);
-        if (!tbody) return;
-        tbody.innerHTML = data.map(s => `
-            <tr>
-                <td><input type="text" class="edit-input" id="edit-srv-name-${s.id}" value="${s.service_name}"></td>
-                <td><input type="number" class="edit-input" id="edit-srv-price-${s.id}" value="${s.price}"></td>
-                <td>
-                    <button class="btn-save" onclick="saveService(${s.id})">Update</button>
-                    <button class="btn-del" onclick="deleteItem('services', ${s.id})">Del</button>
-                </td>
-            </tr>
-        `).join('');
-    }
+function renderServicesTable(data) {
+    const tbody = document.querySelector(`#table-services tbody`);
+    if (!tbody) return;
+    tbody.innerHTML = data.map(s => `
+        <tr>
+            <td><input type="text" class="edit-input" id="edit-srv-name-${s.id}" value="${s.servicetype}"></td>
+            <td><input type="number" class="edit-input" id="edit-srv-price-${s.id}" value="${s.serviceprice}"></td>
+            <td>
+                <button class="btn-save" onclick="saveService('${s.id}')">Update</button>
+                <button class="btn-del" onclick="deleteItem('service', '${s.id}')">Del</button>
+            </td>
+        </tr>
+    `).join('');
+}
 
     function renderInventoryTable(data) {
         const dl = document.getElementById('alt-items');
@@ -382,19 +386,21 @@
                 await supabase.from('inventory').update({ oem_ref_id: data[0].id }).eq('id', data[0].id);
             }
         } else if (table === 'services') {
-            const name = document.getElementById('srv-name').value;
-            const price = document.getElementById('srv-price').value;
-            const { error } = await supabase.from('services').insert([{ service_name: name, price: price }]);
-            if (error) return alert(error.message);
-        } else if (table === 'mechanics') {
-            const first = document.getElementById('mech-first').value;
-            const last = document.getElementById('mech-last').value;
-            const contact = document.getElementById('mech-contact').value;
-            const { error } = await supabase.from('mechanics').insert([{ first_name: first, last_name: last, contact: contact }]);
-            if (error) return alert(error.message);
-        }
-        loadData(table);
-    };
+    const name = document.getElementById('srv-name').value;
+    const price = document.getElementById('srv-price').value;
+    // Map UI inputs to database columns: servicetype and serviceprice
+    const { error } = await supabase.from('service').insert([{ servicetype: name, serviceprice: price }]);
+    if (error) return alert(error.message);
+}
+
+// Update saveService
+window.saveService = async (id) => {
+    const name = document.getElementById(`edit-srv-name-${id}`).value;
+    const price = document.getElementById(`edit-srv-price-${id}`).value;
+    await supabase.from('service').update({ servicetype: name, serviceprice: price }).eq('id', id);
+    loadData('services');
+};
+
 
     window.deleteItem = async (table, id) => {
         if(confirm("Are you sure?")) {
