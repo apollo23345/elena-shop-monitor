@@ -97,8 +97,7 @@
     <hr>
     
 <label>Type/Select Parts/Inventory</label>
-<input list="part-options" id="part-select-input" placeholder="Start typing a part..." oninput="checkAlternatives(this.value)">
-<datalist id="part-options"></datalist>
+<input list="part-options" id="part-select-input" oninput="window.checkAlternatives(this.value)"><datalist id="part-options"></datalist>
 
 <button onclick="addItem('Part')">Add Part</button>
 
