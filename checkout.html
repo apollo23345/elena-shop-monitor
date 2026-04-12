@@ -57,10 +57,17 @@
         <button id="admin-nav" class="admin-only" onclick="location.href='admin.html'">Admin Control</button>
     </nav>
 
-    <div class="no-print" style="margin-bottom: 20px;">
-    <input type="text" id="search-plate" placeholder="Enter Plate to Retrieve..." style="padding: 10px; border-radius: 4px; border: 1px solid #ccc;">
-    <button class="btn" onclick="lookupPastTransaction()" style="background: var(--dark); color:white;">Retrieve History</button>
+<div class="no-print" style="margin-bottom: 20px; flex-direction: column; align-items: center;">
+    <div style="display: flex; gap: 10px;">
+        <input type="text" id="search-plate" placeholder="Enter Plate to Retrieve..." style="padding: 10px; border-radius: 4px; border: 1px solid #ccc;">
+        <button class="btn" onclick="lookupPastTransaction()" style="background: var(--dark); color:white;">Retrieve History</button>
+    </div>
+    
+    <select id="date-selector" onchange="loadSpecificTransaction(this.value)" style="display:none; margin-top: 10px; padding: 10px; width: 300px; border-radius: 4px;">
+        <option value="">-- Select a Previous Visit Date --</option>
+    </select>
 </div>
+
     <div class="receipt-card" id="receipt">
         <div class="header-info">
             <h2 style="margin:0;">ELENA'S AUTO SHOP</h2>
@@ -96,11 +103,11 @@
 
 </body>
 <script type="module">
-    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
     const supabaseUrl = 'https://yrqtnaxnshkkizradtsd.supabase.co'
     const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlycXRuYXhuc2hra2l6cmFkdHNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3ODY5NTMsImV4cCI6MjA5MTM2Mjk1M30.dBveYrCJ24XIkyx6rc-iVaYkdOBGgsa-wuCV2shr1cY'
     const supabase = createClient(supabaseUrl, supabaseKey)
-
+    
     // Identity & Access
     const user = JSON.parse(localStorage.getItem('currentUser'));
     if (!user) {
@@ -117,11 +124,11 @@
         window.location.href = 'login.html';
     };
     
-    const urlParams = new URLSearchParams(window.location.search);
+const urlParams = new URLSearchParams(window.location.search);
     const plate = urlParams.get('plate');
     const name = urlParams.get('name'); 
+    let allFoundTransactions = []; // To store history results
 
-    let currentItems = []; // Global variable to hold items for saving
 
     async function loadReceipt() {
         if (!plate) return;
@@ -191,29 +198,75 @@
         }
     };
 
-    // RETRIEVE PAST TRANSACTION
+// IMPROVED RETRIEVE HISTORY
     window.lookupPastTransaction = async () => {
         const searchPlate = document.getElementById('search-plate').value.trim().toUpperCase();
         if (!searchPlate) return;
 
+        // Fetch ALL transactions for this plate
         const { data, error } = await supabase
             .from('transactions')
             .select('*')
             .eq('plate_number', searchPlate)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
+            .order('created_at', { ascending: false });
 
-        if (data) {
-            document.getElementById('res-name').innerText = data.customer_name;
-            document.getElementById('res-plate').innerText = data.plate_number;
-            document.getElementById('res-date').innerText = new Date(data.created_at).toLocaleDateString();
-            renderTable(data.items_json);
-            alert("Showing most recent past transaction for " + searchPlate);
+        if (error) return alert("Search error: " + error.message);
+
+        if (data && data.length > 0) {
+            allFoundTransactions = data;
+            const selector = document.getElementById('date-selector');
+            
+            // Fill the dropdown with dates
+            selector.innerHTML = '<option value="">-- Select a Previous Visit Date --</option>' + 
+                data.map((t, index) => {
+                    const dateStr = new Date(t.created_at).toLocaleString();
+                    return `<option value="${index}">${dateStr}</option>`;
+                }).join('');
+            
+            selector.style.display = 'block';
+            
+            // Automatically show the most recent one first
+            loadSpecificTransaction(0);
         } else {
             alert("No past transactions found for this plate.");
+            document.getElementById('date-selector').style.display = 'none';
         }
     };
+
+    // NEW FUNCTION TO SWITCH BETWEEN HISTORY DATES
+    window.loadSpecificTransaction = (index) => {
+        if (index === "") return;
+        const data = allFoundTransactions[index];
+        
+        // Update the Receipt UI
+        document.getElementById('res-name').innerText = data.customer_name;
+        document.getElementById('res-plate').innerText = data.plate_number;
+        document.getElementById('res-date').innerText = new Date(data.created_at).toLocaleDateString();
+        
+        renderTable(data.items_json);
+
+        // Hide the "Save" button because this is a past record, not a new one
+        document.querySelector('.btn-done').style.display = 'none';
+    };
+
+    // Update loadReceipt to show the Save button if we are doing a FRESH checkout
+    async function loadReceipt() {
+        if (!plate) return;
+        document.querySelector('.btn-done').style.display = 'inline-block';
+        
+        document.getElementById('res-name').innerText = name || "---";
+        document.getElementById('res-plate').innerText = plate;
+        document.getElementById('res-date').innerText = new Date().toLocaleDateString();
+
+        const { data: items, error } = await supabase
+            .from('transaction_details')
+            .select('*')
+            .eq('plate_number', plate);
+
+        if (error) return console.error(error);
+        currentItems = items;
+        renderTable(items);
+    }
 
     loadReceipt();
 </script>
