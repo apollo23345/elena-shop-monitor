@@ -63,16 +63,21 @@
     </nav>
 
     <div class="container">
-        <div class="card">
-            <h3 id="customer-info">Booking for: </h3>
-            <label>Select Service</label>
-            <select id="service-select"></select>
-            <button onclick="addItem('Service')">Add Service</button>
-            <hr>
-            <label>Select Parts/Inventory</label>
-            <select id="part-select"></select>
-            <button onclick="addItem('Part')">Add Part</button>
-        </div>
+<div class="card">
+    <h3 id="customer-info">Booking for: </h3>
+    
+    <label>Type/Select Service</label>
+    <input list="service-options" id="service-select-input" placeholder="Start typing a service...">
+    <datalist id="service-options"></datalist>
+    <button onclick="addItem('Service')">Add Service</button>
+    
+    <hr>
+    
+    <label>Type/Select Parts/Inventory</label>
+    <input list="part-options" id="part-select-input" placeholder="Start typing a part...">
+    <datalist id="part-options"></datalist>
+    <button onclick="addItem('Part')">Add Part</button>
+</div>
 
         <div class="card">
             <h3>Job Summary</h3>
@@ -115,27 +120,50 @@
         document.getElementById('customer-info').innerText = `Booking for: ${name} (${plate})`;
     }
 
-    async function loadOptions() {
-        const { data: srv } = await supabase.from('services').select('*');
-        const { data: inv } = await supabase.from('inventory').select('*');
-        
-        if (srv) document.getElementById('service-select').innerHTML = srv.map(s => `<option value="${s.id}" data-price="${s.price}">${s.service_name} - ₱${s.price}</option>`).join('');
-        if (inv) document.getElementById('part-select').innerHTML = inv.map(i => `<option value="${i.id}" data-price="${i.price}">${i.item_name} - ₱${i.price}</option>`).join('');
-    }
+let serviceData = []; // To store full details (id, name, price)
+let inventoryData = [];
 
-    window.addItem = (type) => {
-        const selectId = type === 'Service' ? 'service-select' : 'part-select';
-        const select = document.getElementById(selectId);
-        if (!select.options[select.selectedIndex]) return;
-        const option = select.options[select.selectedIndex];
-        
+async function loadOptions() {
+    const { data: srv } = await supabase.from('services').select('*');
+    const { data: inv } = await supabase.from('inventory').select('*');
+    
+    if (srv) {
+        serviceData = srv;
+        document.getElementById('service-options').innerHTML = srv.map(s => 
+            `<option value="${s.service_name}">`
+        ).join('');
+    }
+    if (inv) {
+        inventoryData = inv;
+        document.getElementById('part-options').innerHTML = inv.map(i => 
+            `<option value="${i.item_name}">`
+        ).join('');
+    }
+}
+
+window.addItem = (type) => {
+    const inputId = type === 'Service' ? 'service-select-input' : 'part-select-input';
+    const input = document.getElementById(inputId);
+    const typedValue = input.value;
+
+    // Find the item in our data arrays to get the price
+    const sourceData = type === 'Service' ? serviceData : inventoryData;
+    const nameField = type === 'Service' ? 'service_name' : 'item_name';
+    
+    const foundItem = sourceData.find(item => item[nameField] === typedValue);
+
+    if (foundItem) {
         selectedItems.push({
             type: type,
-            name: option.text.split(' - ')[0],
-            price: parseFloat(option.getAttribute('data-price'))
+            name: foundItem[nameField],
+            price: parseFloat(foundItem.price)
         });
         updateSummary();
-    };
+        input.value = ''; // Clear input for next item
+    } else {
+        alert("Please select a valid item from the list!");
+    }
+};
 
     function updateSummary() {
         const list = document.getElementById('booking-list');
