@@ -139,7 +139,7 @@ async function loadDashboard() {
     const { data: bays } = await supabase.from('bays').select('*').order('id');
     const { data: mechs } = await supabase.from('mechanics').select('*').order('name');
     
-    // 2. Render Mechanics
+    // 2. Render Mechanicsa
     const mechList = document.getElementById('mechanic-list');
     mechList.innerHTML = mechs.map(m => `
         <div class="mech-tag ${m.status.toLowerCase()}">
