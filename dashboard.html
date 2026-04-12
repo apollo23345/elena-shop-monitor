@@ -99,16 +99,15 @@
     </div>
 </body>
 
-    <script type="module">
-        // 1. IDENTITY CHECK
-        const user = JSON.parse(localStorage.getItem('currentUser'));
-        if (!user) {
-       window.location.href = 'login.html';
-        } else {
+<script type="module">
+    // 1. IDENTITY CHECK
+    const user = JSON.parse(localStorage.getItem('currentUser'));
+    if (!user) {
+        window.location.href = 'login.html';
+    } else {
         document.getElementById('display-user-name').innerText = user.first_name + " " + user.last_name;
-       // Show Admin button only if manager_id is null
-      if (user.manager_id === null) {
-        document.getElementById('admin-nav').style.display = 'block';
+        if (user.manager_id === null) {
+            document.getElementById('admin-nav').style.display = 'block';
         }
     }
 
@@ -118,143 +117,111 @@
         window.location.href = 'login.html';
     };
 
+    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
+    const supabaseUrl = 'https://yrqtnaxnshkkizradtsd.supabase.co'
+    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlycXRuYXhuc2hra2l6cmFkdHNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3ODY5NTMsImV4cCI6MjA5MTM2Mjk1M30.dBveYrCJ24XIkyx6rc-iVaYkdOBGgsa-wuCV2shr1cY'
+    const supabase = createClient(supabaseUrl, supabaseKey)
 
-        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
-        const supabaseUrl = 'https://yrqtnaxnshkkizradtsd.supabase.co'
-        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlycXRuYXhuc2hra2l6cmFkdHNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3ODY5NTMsImV4cCI6MjA5MTM2Mjk1M30.dBveYrCJ24XIkyx6rc-iVaYkdOBGgsa-wuCV2shr1cY'
-        const supabase = createClient(supabaseUrl, supabaseKey)
+    const urlParams = new URLSearchParams(window.location.search);
+    const plate = urlParams.get('plate');
+    const name = urlParams.get('name');
+    let selectedBayId = null;
 
-        const urlParams = new URLSearchParams(window.location.search);
-        const plate = urlParams.get('plate');
-        const name = urlParams.get('name');
-        let selectedBayId = null;
+    if (plate) {
+        document.getElementById('pending-alert').style.display = 'block';
+        document.getElementById('pending-info').innerText = `${name} (${plate})`;
+    }
 
-        if (plate) {
-            document.getElementById('pending-alert').style.display = 'block';
-            document.getElementById('pending-info').innerText = `${name} (${plate})`;
+    async function loadDashboard() {
+        const { data: bays } = await supabase.from('bays').select('*').order('id');
+        const { data: mechs } = await supabase.from('mechanics').select('*').order('name');
+        
+        // Render Mechanics Tags
+        const mechList = document.getElementById('mechanic-list');
+        mechList.innerHTML = mechs.map(m => `
+            <div class="mech-tag ${m.status.toLowerCase()}">
+                <span class="status-dot"></span>
+                <strong>${m.name}</strong> 
+                <small style="color:#666">(${m.status})</small>
+            </div>
+        `).join('');
+
+        // Render Bays Cards
+        const grid = document.getElementById('bay-grid');
+        grid.innerHTML = bays.map(bay => {
+            const assignedMech = mechs.find(m => m.id == bay.current_mechanic_id);
+            const mechName = assignedMech ? assignedMech.name : "Unassigned";
+
+            return `
+                <div class="bay-card ${bay.status.toLowerCase()}" onclick="handleBayClick(${bay.id}, '${bay.status}', '${bay.bay_name}')">
+                    <div class="sticker">${bay.status.toUpperCase()}</div>
+                    <h2>${bay.bay_name}</h2>
+                    ${bay.status === 'Occupied' ? `
+                        <div style="background: #f9f9f9; padding: 10px; border-radius: 8px; margin-top: 10px; text-align: left;">
+                            <p><strong>👤 Customer:</strong> ${bay.current_customer}</p>
+                            <p style="font-size: 0.9em; color: #666;">🚗 ${bay.current_plate}</p>
+                            <p style="font-size: 0.9em; color: var(--primary);">🔧 <strong>Mechanic:</strong> ${mechName}</p>
+                        </div>
+                        <button onclick="event.stopPropagation(); releaseBay(${bay.id})" style="margin-top:10px; background:#ff4d4d; color:white; border:none; padding:8px; border-radius:4px; cursor:pointer; width: 100%;">Finish Job</button>
+                    ` : '<p style="color:#aaa; margin-top:10px;">Empty / Ready</p>'}
+                </div>
+            `;
+        }).join('');
+    }
+
+    window.handleBayClick = async (id, status, bayName) => {
+        if (status === 'Available' && plate) {
+            selectedBayId = id;
+            document.getElementById('target-bay').innerText = bayName;
+            const { data: mechs } = await supabase.from('mechanics').select('*').eq('status', 'Available');
+            document.getElementById('mech-select').innerHTML = mechs.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
+            document.getElementById('modal').style.display = 'flex';
         }
+    };
 
-async function loadDashboard() {
-    // 1. Fetch Data
-    const { data: bays } = await supabase.from('bays').select('*').order('id');
-    const { data: mechs } = await supabase.from('mechanics').select('*').order('name');
-    
-    // 2. Render Mechanics
-    const mechList = document.getElementById('mechanic-list');
-    mechList.innerHTML = mechs.map(m => `
-        <div class="mech-tag ${m.status.toLowerCase()}">
-            <span class="status-dot"></span>
-            <strong>${m.name}</strong> 
-            <small style="color:#666">(${m.status})</small>
-        </div>
-    `).join('');
+    window.confirmAssignment = async () => {
+        const mechId = document.getElementById('mech-select').value;
+        if(!mechId) { alert("Please select a mechanic"); return; }
 
-// 3. Render Bays
-const grid = document.getElementById('bay-grid');
-grid.innerHTML = bays.map(bay => {
-    // Find the name of the mechanic assigned to this bay
-    const assignedMech = mechs.find(m => m.id == bay.current_mechanic_id);
-    const mechName = assignedMech ? assignedMech.name : "Unassigned";
+        await supabase.from('bays').update({ 
+            status: 'Occupied', 
+            current_plate: plate, 
+            current_customer: name,
+            current_mechanic_id: mechId 
+        }).eq('id', selectedBayId);
 
-    return `
-        <div class="bay-card ${bay.status.toLowerCase()}" onclick="handleBayClick(${bay.id}, '${bay.status}', '${bay.bay_name}')">
-            <div class="sticker">${bay.status.toUpperCase()}</div>
-            <h2>${bay.bay_name}</h2>
-            ${bay.status === 'Occupied' ? `
-                <div style="background: #f9f9f9; padding: 10px; border-radius: 8px; margin-top: 10px;">
-                    <p><strong>👤 Customer:</strong> ${bay.current_customer}</p>
-                    <p style="font-size: 0.9em; color: #666;">🚗 ${bay.current_plate}</p>
-                    <p style="font-size: 0.9em; color: var(--primary);">🔧 <strong>Mechanic:</strong> ${mechName}</p>
-                </div>
-                <button onclick="event.stopPropagation(); releaseBay(${bay.id})" style="margin-top:10px; background:#ff4d4d; color:white; border:none; padding:8px; border-radius:4px; cursor:pointer; width: 100%;">Finish Job</button>
-            ` : '<p style="color:#aaa; margin-top:10px;">Empty / Ready</p>'}
-        </div>
-    `;
-}).join('');// 3. Render Bays
-const grid = document.getElementById('bay-grid');
-grid.innerHTML = bays.map(bay => {
-    // Find the name of the mechanic assigned to this bay
-    const assignedMech = mechs.find(m => m.id == bay.current_mechanic_id);
-    const mechName = assignedMech ? assignedMech.name : "Unassigned";
+        await supabase.from('mechanics').update({ status: 'Busy' }).eq('id', mechId);
 
-    return `
-        <div class="bay-card ${bay.status.toLowerCase()}" onclick="handleBayClick(${bay.id}, '${bay.status}', '${bay.bay_name}')">
-            <div class="sticker">${bay.status.toUpperCase()}</div>
-            <h2>${bay.bay_name}</h2>
-            ${bay.status === 'Occupied' ? `
-                <div style="background: #f9f9f9; padding: 10px; border-radius: 8px; margin-top: 10px;">
-                    <p><strong>👤 Customer:</strong> ${bay.current_customer}</p>
-                    <p style="font-size: 0.9em; color: #666;">🚗 ${bay.current_plate}</p>
-                    <p style="font-size: 0.9em; color: var(--primary);">🔧 <strong>Mechanic:</strong> ${mechName}</p>
-                </div>
-                <button onclick="event.stopPropagation(); releaseBay(${bay.id})" style="margin-top:10px; background:#ff4d4d; color:white; border:none; padding:8px; border-radius:4px; cursor:pointer; width: 100%;">Finish Job</button>
-            ` : '<p style="color:#aaa; margin-top:10px;">Empty / Ready</p>'}
-        </div>
-    `;
-}).join('');
-}
+        window.location.href = 'dashboard.html';
+    };
 
-        window.handleBayClick = async (id, status, bayName) => {
-            if (status === 'Available' && plate) {
-                selectedBayId = id;
-                document.getElementById('target-bay').innerText = bayName;
-                const { data: mechs } = await supabase.from('mechanics').select('*').eq('status', 'Available');
-                document.getElementById('mech-select').innerHTML = mechs.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
-                document.getElementById('modal').style.display = 'flex';
-            }
-        };
+    window.releaseBay = async (id) => {
+        if(!confirm("Are you sure this job is finished?")) return;
 
-window.confirmAssignment = async () => {
-    const mechId = document.getElementById('mech-select').value;
-    
-    // 1. Update Bay to Occupied AND save the mechanic ID here
-    await supabase.from('bays').update({ 
-        status: 'Occupied', 
-        current_plate: plate, 
-        current_customer: name,
-        current_mechanic_id: mechId // <--- ADD THIS
-    }).eq('id', selectedBayId);
+        const { data: bay } = await supabase
+            .from('bays')
+            .select('current_plate, current_customer, current_mechanic_id')
+            .eq('id', id)
+            .single();
 
-    // 2. Update Mechanic to Busy
-    await supabase.from('mechanics').update({ status: 'Busy' }).eq('id', mechId);
+        if (!bay) return;
 
-    window.location.href = 'dashboard.html';
-};
-
-window.releaseBay = async (id) => {
-    if(!confirm("Are you sure this job is finished?")) return;
-
-    // 1. Get the current info including the mechanic ID
-    const { data: bay } = await supabase
-        .from('bays')
-        .select('current_plate, current_customer, current_mechanic_id')
-        .eq('id', id)
-        .single();
-
-    if (!bay) return;
-
-    // 2. Clear the bay and the mechanic reference
-    await supabase.from('bays')
-        .update({ 
+        await supabase.from('bays').update({ 
             status: 'Available', 
             current_plate: null, 
             current_customer: null,
-            current_mechanic_id: null // <--- CLEAR THIS
-        })
-        .eq('id', id);
+            current_mechanic_id: null 
+        }).eq('id', id);
 
-    // 3. Set the specific mechanic back to Available
-    if (bay.current_mechanic_id) {
-        await supabase.from('mechanics')
-            .update({ status: 'Available' })
-            .eq('id', bay.current_mechanic_id);
-    }
+        if (bay.current_mechanic_id) {
+            await supabase.from('mechanics').update({ status: 'Available' }).eq('id', bay.current_mechanic_id);
+        }
 
-    // 4. Redirect to checkout
-    window.location.href = `checkout.html?plate=${bay.current_plate}&name=${encodeURIComponent(bay.current_customer)}`;
-};
-        window.closeModal = () => document.getElementById('modal').style.display = 'none';
-        loadDashboard();
-    </script>
+        window.location.href = `checkout.html?plate=${bay.current_plate}&name=${encodeURIComponent(bay.current_customer)}`;
+    };
+
+    window.closeModal = () => document.getElementById('modal').style.display = 'none';
+    loadDashboard();
+</script>
 </body>
 </html>
