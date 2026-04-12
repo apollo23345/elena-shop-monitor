@@ -5,7 +5,6 @@
     <link rel="stylesheet" href="style.css">
 
     <style>
-        /* 2. ADMIN-SPECIFIC STYLES ONLY */
         .admin-nav { 
             background: #eee; 
             padding: 10px; 
@@ -28,7 +27,7 @@
         }
 
         .container { 
-            max-width: 900px; 
+            max-width: 1000px; 
             margin: 20px auto; 
             padding: 20px; 
             background: white; 
@@ -45,19 +44,36 @@
             background: #f9f9f9; 
             padding: 15px; 
             border-radius: 5px; 
+            flex-wrap: wrap;
         }
-        input { 
+        input, select { 
             padding: 10px; 
             border: 1px solid #ddd; 
             border-radius: 4px; 
             flex: 1; 
+            min-width: 150px;
         }
         
-        table { width: 100%; border-collapse: collapse; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px;}
         th, td { text-align: left; padding: 12px; border-bottom: 1px solid #eee; }
         
         .btn-add { background: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; }
         .btn-del { background: var(--danger); color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; }
+        .btn-save { background: #28a745; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; margin-right: 5px; }
+
+        /* Search Bar Style */
+        .search-container {
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .search-container input {
+            max-width: 300px;
+        }
+
+        /* Editing mode styles */
+        .edit-input { width: 100%; padding: 5px; box-sizing: border-box; }
     </style>
 </head>
 <body>
@@ -91,11 +107,27 @@
         <div id="tab-mechanics" class="tab-content active">
             <h3>Manage Mechanics</h3>
             <div class="form-inline">
-                <input type="text" id="mech-name" placeholder="Mechanic Name">
+                <input type="text" id="mech-first" placeholder="First Name">
+                <input type="text" id="mech-last" placeholder="Last Name">
+                <input type="text" id="mech-contact" placeholder="Contact Number">
                 <button class="btn-add" onclick="addItem('mechanics')">Add Mechanic</button>
             </div>
+
+            <div class="search-container">
+                <strong>Search:</strong>
+                <input type="text" id="mech-search" placeholder="Search by name..." onkeyup="filterMechanics()">
+            </div>
+
             <table id="table-mechanics">
-                <thead><tr><th>Name</th><th>Status</th><th>Action</th></tr></thead>
+                <thead>
+                    <tr>
+                        <th>First Name</th>
+                        <th>Last Name</th>
+                        <th>Contact</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
                 <tbody></tbody>
             </table>
         </div>
@@ -127,13 +159,13 @@
         </div>
     </div>
 
-
-</body>
     <script type="module">
         import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
         const supabaseUrl = 'https://yrqtnaxnshkkizradtsd.supabase.co'
         const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlycXRuYXhuc2hra2l6cmFkdHNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3ODY5NTMsImV4cCI6MjA5MTM2Mjk1M30.dBveYrCJ24XIkyx6rc-iVaYkdOBGgsa-wuCV2shr1cY'
         const supabase = createClient(supabaseUrl, supabaseKey)
+
+        let allMechanics = [];
 
         // Security Check
         const user = JSON.parse(localStorage.getItem('currentUser'));
@@ -141,18 +173,15 @@
             alert("Access Denied: Admins Only");
             window.location.href = 'dashboard.html';
         } else {
-            // MATCHED ID: Using 'display-user-name' from HTML
             document.getElementById('display-user-name').innerText = user.first_name + " " + user.last_name + " (Admin)";
             loadData('mechanics');
         }
 
-        // Logout
         window.logout = () => {
             localStorage.removeItem('currentUser');
             window.location.href = 'login.html';
         };
 
-        // Tab Switching Logic
         window.showTab = (tabName) => {
             document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.admin-nav button').forEach(b => b.classList.remove('active-tab'));
@@ -163,43 +192,107 @@
             loadData(tabName);
         }
 
-        // Add Data
         window.addItem = async (table) => {
             let payload = {};
-            if (table === 'mechanics') payload = { name: document.getElementById('mech-name').value };
+            if (table === 'mechanics') {
+                payload = { 
+                    first_name: document.getElementById('mech-first').value,
+                    last_name: document.getElementById('mech-last').value,
+                    contact: document.getElementById('mech-contact').value,
+                    status: 'Available'
+                };
+            }
             if (table === 'services') payload = { service_name: document.getElementById('srv-name').value, price: document.getElementById('srv-price').value };
             if (table === 'inventory') payload = { item_name: document.getElementById('inv-name').value, price: document.getElementById('inv-price').value };
 
             const { error } = await supabase.from(table).insert([payload]);
             if (!error) {
                 // Clear inputs
-                if (table === 'mechanics') document.getElementById('mech-name').value = '';
+                if (table === 'mechanics') {
+                    document.getElementById('mech-first').value = '';
+                    document.getElementById('mech-last').value = '';
+                    document.getElementById('mech-contact').value = '';
+                }
                 else if (table === 'services') { document.getElementById('srv-name').value = ''; document.getElementById('srv-price').value = ''; }
                 else { document.getElementById('inv-name').value = ''; document.getElementById('inv-price').value = ''; }
                 loadData(table);
             } else alert(error.message);
         }
 
-        // Delete Data
+        // Inline Save for Mechanics
+        window.saveMechanic = async (id) => {
+            const first = document.getElementById(`edit-first-${id}`).value;
+            const last = document.getElementById(`edit-last-${id}`).value;
+            const contact = document.getElementById(`edit-contact-${id}`).value;
+            const status = document.getElementById(`edit-status-${id}`).value;
+
+            const { error } = await supabase
+                .from('mechanics')
+                .update({ first_name: first, last_name: last, contact: contact, status: status })
+                .eq('id', id);
+
+            if (error) alert(error.message);
+            else loadData('mechanics');
+        };
+
         window.deleteItem = async (table, id) => {
             if(confirm("Are you sure?")) {
-                await supabase.from(table).delete().eq('id', id);
+                const { error } = await supabase.from(table).delete().eq('id', id);
+                if (error) alert(error.message);
                 loadData(table);
             }
         }
 
-        // Load Data
         async function loadData(table) {
-            const { data } = await supabase.from(table).select('*').order('id');
+            const { data, error } = await supabase.from(table).select('*').order('id');
+            if (error) return console.error(error);
+
             const tbody = document.querySelector(`#table-${table} tbody`);
             
-            tbody.innerHTML = data.map(item => `
+            if (table === 'mechanics') {
+                allMechanics = data;
+                renderMechanicsTable(data);
+            } else {
+                tbody.innerHTML = data.map(item => `
+                    <tr>
+                        <td>${item.service_name || item.item_name}</td>
+                        <td>₱${parseFloat(item.price).toFixed(2)}</td>
+                        <td><button class="btn-del" onclick="deleteItem('${table}', ${item.id})">Delete</button></td>
+                    </tr>
+                `).join('');
+            }
+        }
+
+        function renderMechanicsTable(data) {
+            const tbody = document.querySelector(`#table-mechanics tbody`);
+            tbody.innerHTML = data.map(m => `
                 <tr>
-                    <td>${item.name || item.service_name || item.item_name}</td>
-                    <td>${item.price ? '₱' + item.price : item.status}</td>
-                    <td><button class="btn-del" onclick="deleteItem('${table}', ${item.id})">Delete</button></td>
+                    <td><input type="text" class="edit-input" id="edit-first-${m.id}" value="${m.first_name}"></td>
+                    <td><input type="text" class="edit-input" id="edit-last-${m.id}" value="${m.last_name}"></td>
+                    <td><input type="text" class="edit-input" id="edit-contact-${m.id}" value="${m.contact || ''}"></td>
+                    <td>
+                        <select id="edit-status-${m.id}">
+                            <option value="Available" ${m.status === 'Available' ? 'selected' : ''}>Available</option>
+                            <option value="Busy" ${m.status === 'Busy' ? 'selected' : ''}>Busy</option>
+                            <option value="Off-duty" ${m.status === 'Off-duty' ? 'selected' : ''}>Off-duty</option>
+                        </select>
+                    </td>
+                    <td>
+                        <button class="btn-save" onclick="saveMechanic(${m.id})">Update</button>
+                        <button class="btn-del" onclick="deleteItem('mechanics', ${m.id})">Del</button>
+                    </td>
                 </tr>
             `).join('');
         }
+
+        window.filterMechanics = () => {
+            const query = document.getElementById('mech-search').value.toLowerCase();
+            const filtered = allMechanics.filter(m => 
+                m.first_name.toLowerCase().includes(query) || 
+                m.last_name.toLowerCase().includes(query)
+            );
+            renderMechanicsTable(filtered);
+        }
     </script>
+</body>
 </html>
