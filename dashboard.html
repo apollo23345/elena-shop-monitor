@@ -149,19 +149,49 @@ async function loadDashboard() {
         </div>
     `).join('');
 
-    // 3. Render Bays (Your existing logic)
-    const grid = document.getElementById('bay-grid');
-    grid.innerHTML = bays.map(bay => `
+// 3. Render Bays
+const grid = document.getElementById('bay-grid');
+grid.innerHTML = bays.map(bay => {
+    // Find the name of the mechanic assigned to this bay
+    const assignedMech = mechs.find(m => m.id == bay.current_mechanic_id);
+    const mechName = assignedMech ? assignedMech.name : "Unassigned";
+
+    return `
         <div class="bay-card ${bay.status.toLowerCase()}" onclick="handleBayClick(${bay.id}, '${bay.status}', '${bay.bay_name}')">
             <div class="sticker">${bay.status.toUpperCase()}</div>
             <h2>${bay.bay_name}</h2>
             ${bay.status === 'Occupied' ? `
-                <p><strong>${bay.current_customer}</strong></p>
-                <p style="font-size: 0.9em; color: #666;">${bay.current_plate}</p>
-                <button onclick="event.stopPropagation(); releaseBay(${bay.id})" style="margin-top:10px; background:#ff4d4d; color:white; border:none; padding:8px; border-radius:4px; cursor:pointer;">Finish Job</button>
-            ` : '<p style="color:#aaa">Empty</p>'}
+                <div style="background: #f9f9f9; padding: 10px; border-radius: 8px; margin-top: 10px;">
+                    <p><strong>👤 Customer:</strong> ${bay.current_customer}</p>
+                    <p style="font-size: 0.9em; color: #666;">🚗 ${bay.current_plate}</p>
+                    <p style="font-size: 0.9em; color: var(--primary);">🔧 <strong>Mechanic:</strong> ${mechName}</p>
+                </div>
+                <button onclick="event.stopPropagation(); releaseBay(${bay.id})" style="margin-top:10px; background:#ff4d4d; color:white; border:none; padding:8px; border-radius:4px; cursor:pointer; width: 100%;">Finish Job</button>
+            ` : '<p style="color:#aaa; margin-top:10px;">Empty / Ready</p>'}
         </div>
-    `).join('');
+    `;
+}).join('');// 3. Render Bays
+const grid = document.getElementById('bay-grid');
+grid.innerHTML = bays.map(bay => {
+    // Find the name of the mechanic assigned to this bay
+    const assignedMech = mechs.find(m => m.id == bay.current_mechanic_id);
+    const mechName = assignedMech ? assignedMech.name : "Unassigned";
+
+    return `
+        <div class="bay-card ${bay.status.toLowerCase()}" onclick="handleBayClick(${bay.id}, '${bay.status}', '${bay.bay_name}')">
+            <div class="sticker">${bay.status.toUpperCase()}</div>
+            <h2>${bay.bay_name}</h2>
+            ${bay.status === 'Occupied' ? `
+                <div style="background: #f9f9f9; padding: 10px; border-radius: 8px; margin-top: 10px;">
+                    <p><strong>👤 Customer:</strong> ${bay.current_customer}</p>
+                    <p style="font-size: 0.9em; color: #666;">🚗 ${bay.current_plate}</p>
+                    <p style="font-size: 0.9em; color: var(--primary);">🔧 <strong>Mechanic:</strong> ${mechName}</p>
+                </div>
+                <button onclick="event.stopPropagation(); releaseBay(${bay.id})" style="margin-top:10px; background:#ff4d4d; color:white; border:none; padding:8px; border-radius:4px; cursor:pointer; width: 100%;">Finish Job</button>
+            ` : '<p style="color:#aaa; margin-top:10px;">Empty / Ready</p>'}
+        </div>
+    `;
+}).join('');
 }
 
         window.handleBayClick = async (id, status, bayName) => {
