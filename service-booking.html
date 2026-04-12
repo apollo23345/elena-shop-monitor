@@ -182,32 +182,31 @@
             .map(i => `<option value="${i.item_name} (Stock: ${i.current_qty})">`).join('');
     }
 
-    window.addItem = (type) => {
-        const inputId = type === 'Service' ? 'service-select-input' : 'part-select-input';
-        const input = document.getElementById(inputId);
-        const typedValue = input.value.split(' (Stock:')[0].trim(); 
+window.addItem = (type) => {
+    const inputId = type === 'Service' ? 'service-select-input' : 'part-select-input';
+    const input = document.getElementById(inputId);
+    const typedValue = input.value.split(' (Stock:')[0].trim(); 
 
-        if (type === 'Service') {
-            const found = serviceData.find(s => s.service_name === typedValue);
-            if (!found) return alert("Service not found!");
-            if (selectedItems.some(item => item.name === found.service_name)) {
-                return alert("This service is already in the summary!");
-            }
-            selectedItems.push({ type, name: found.service_name, price: found.price, id: found.id });
-        } else {
-            const found = inventoryData.find(i => i.item_name === typedValue);
-            if (!found || found.current_qty <= 0) return alert("Part unavailable or out of stock!");
-
-
-            found.current_qty--; 
-            selectedItems.push({ type, name: found.item_name, price: found.price, id: found.id });
+    if (type === 'Service') {
+        const found = serviceData.find(s => s.service_name === typedValue);
+        if (!found) return alert("Service not found!");
+        selectedItems.push({ type, name: found.service_name, price: found.price, id: found.id });
+    } else {
+        const found = inventoryData.find(i => i.item_name === typedValue);
+        
+        // Ensure the item can be added even if oem_ref_id is null or only points to itself
+        if (!found || found.current_qty <= 0) {
+            return alert("Part unavailable or out of stock!");
         }
 
-        input.value = ''; 
-        renderDatalists(); 
-        updateSummary(); 
-// ADD THIS AT THE VERY END OF THE FUNCTION
-    document.getElementById('alt-suggestion-box').innerHTML = ""; 
+        found.current_qty--; 
+        selectedItems.push({ type, name: found.item_name, price: found.price, id: found.id });
+    }
+
+    input.value = ''; 
+    document.getElementById('alt-suggestion-box').innerHTML = ""; // Clear suggestions after adding
+    renderDatalists(); 
+    updateSummary(); 
 };
     
 
@@ -232,7 +231,6 @@
 window.checkAlternatives = (val) => {
     const suggestionBox = document.getElementById('alt-suggestion-box');
     
-    // Clear box if input is empty
     if (!val || val.trim() === "") {
         suggestionBox.innerHTML = "";
         return;
@@ -241,17 +239,20 @@ window.checkAlternatives = (val) => {
     const typedName = val.split(' (Stock:')[0].trim();
     const currentItem = inventoryData.find(i => i.item_name === typedName);
 
-    // If item not found in data yet, stay quiet
-    if (!currentItem) return;
+    // If item isn't in our inventory list yet, clear and wait
+    if (!currentItem) {
+        suggestionBox.innerHTML = "";
+        return;
+    }
 
-    // Find ALL items in the same group, excluding the one currently selected
+    // Logic for finding group alternatives
     const alternatives = inventoryData.filter(i => 
+        currentItem.oem_ref_id !== null && // Only search if the item has a group
         i.oem_ref_id === currentItem.oem_ref_id && 
         i.item_name !== currentItem.item_name
     );
 
     if (alternatives.length > 0) {
-        // Create a scrollable list of alternatives with stock
         const listItems = alternatives.map(a => 
             `<div style="margin-bottom: 4px;">
                 <b style="color: #27ae60;">${a.item_name}</b> 
@@ -261,11 +262,10 @@ window.checkAlternatives = (val) => {
         
         suggestionBox.innerHTML = `<strong>💡 Alternatives found:</strong><br>${listItems}`;
     } else {
-        // Explicit message for items with no alternatives (like tires)
+        // This explicitly handles your tires or any part without a group
         suggestionBox.innerHTML = `<span style="color: #999;">ℹ️ No alternatives available for this part.</span>`;
     }
-};
-
+}; 
 
     window.removeItem = (index) => {
         const item = selectedItems[index];
