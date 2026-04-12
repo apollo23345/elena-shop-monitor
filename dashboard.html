@@ -88,15 +88,15 @@
 
 <div class="dashboard-grid" id="bay-grid"></div>
 
-    <div id="modal">
-        <div class="modal-content">
-            <h3>Assign Job to <span id="target-bay"></span></h3>
-            <label>Select Mechanic:</label>
-            <select id="mech-select" style=S"width:100%; padding:10px; margin:10px 0;"></select>
-            <button class="btn-assign" onclick="confirmAssignment()" style="width:100%; padding:12px; background:var(--primary); color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Confirm Assignment</button>
-            <button onclick="closeModal()" style="width:100%; margin-top:10px; background:none; border:none; color:gray; cursor:pointer;">Cancel</button>
-        </div>
+<div id="modal">
+    <div class="modal-content">
+        <h3>Assign Job to <span id="target-bay"></span></h3>
+        <label>Select Mechanic:</label>
+        <select id="mech-select" style="width:100%; padding:10px; margin:10px 0; border-radius:4px;"></select>
+        <button class="btn-assign" onclick="confirmAssignment()" style="width:100%; padding:12px; background:var(--primary); color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Confirm Assignment</button>
+        <button onclick="closeModal()" style="width:100%; margin-top:10px; background:none; border:none; color:gray; cursor:pointer;">Cancel</button>
     </div>
+</div>
 </body>
 
 <script type="module">
@@ -183,7 +183,7 @@ window.confirmAssignment = async () => {
     const mechId = document.getElementById('mech-select').value;
     if(!mechId) { alert("Please select a mechanic"); return; }
 
-    // 1. Update Bay
+    // 1. Update Bay (Ensure current_mechanic_id exists in Supabase first!)
     const { error: bayError } = await supabase.from('bays').update({ 
         status: 'Occupied', 
         current_plate: plate, 
@@ -193,14 +193,20 @@ window.confirmAssignment = async () => {
 
     if (bayError) {
         console.error("Bay Update Error:", bayError);
-        alert("Failed to update bay: " + bayError.message);
+        alert("Database Error: Make sure 'current_mechanic_id' column exists in your Supabase 'bays' table.");
         return;
     }
 
-    // 2. Update Mechanic
-    await supabase.from('mechanics').update({ status: 'Busy' }).eq('id', mechId);
+    // 2. Update Mechanic Status
+    const { error: mechError } = await supabase.from('mechanics').update({ 
+        status: 'Busy' 
+    }).eq('id', mechId);
 
-    // 3. Refresh
+    if (mechError) {
+        alert("Mechanic updated failed, but bay was assigned.");
+    }
+
+    // 3. Force a clean refresh to the dashboard without the URL parameters
     window.location.href = 'dashboard.html';
 };
 
