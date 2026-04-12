@@ -2,35 +2,60 @@
 <html>
 <head>
     <title>Elena's Shop - Admin Management</title>
-    <style>
-        :root { --primary: #3ecf8e; --dark: #2f2f2f; --light: #f4f4f4; --danger: #ff4d4d; }
-        body { font-family: sans-serif; margin: 0; background: var(--light); }
-        header { background: white; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ddd; }
-        nav { background: var(--dark); padding: 10px; display: flex; gap: 10px; justify-content: center; }
-        nav button { background: transparent; color: white; border: 1px solid white; padding: 8px 15px; cursor: pointer; border-radius: 4px; }
-        
-        .admin-nav { background: #eee; padding: 10px; display: flex; justify-content: center; gap: 20px; border-bottom: 1px solid #ccc; }
-        .admin-nav button { border: none; background: none; font-weight: bold; cursor: pointer; padding: 10px; color: #666; }
-        .admin-nav button.active-tab { color: var(--primary); border-bottom: 3px solid var(--primary); }
+    <link rel="stylesheet" href="style.css">
 
-        .container { max-width: 900px; margin: 20px auto; padding: 20px; background: white; border-radius: 8px; }
+    <style>
+        /* 2. ADMIN-SPECIFIC STYLES ONLY */
+        .admin-nav { 
+            background: #eee; 
+            padding: 10px; 
+            display: flex; 
+            justify-content: center; 
+            gap: 20px; 
+            border-bottom: 1px solid #ccc; 
+        }
+        .admin-nav button { 
+            border: none; 
+            background: none; 
+            font-weight: bold; 
+            cursor: pointer; 
+            padding: 10px; 
+            color: #666; 
+        }
+        .admin-nav button.active-tab { 
+            color: var(--primary); 
+            border-bottom: 3px solid var(--primary); 
+        }
+
+        .container { 
+            max-width: 900px; 
+            margin: 20px auto; 
+            padding: 20px; 
+            background: white; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
 
-        /* HEADER & NAVBAR */
-        header { background: white; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ddd; }
-        .logo-area { display: flex; align-items: center; gap: 10px; font-weight: bold; font-size: 1.2em; }
-        .user-area { display: flex; align-items: center; gap: 15px; }
-        nav { background: var(--dark); padding: 10px; display: flex; gap: 10px; justify-content: center; }
-        nav button { background: transparent; color: white; border: 1px solid white; padding: 8px 15px; cursor: pointer; border-radius: 4px; }
-        nav button:hover, nav button.active { background: var(--primary); border-color: var(--primary); }
-        .admin-only { display: none; border-color: gold; color: gold; }
-
-        .form-inline { display: flex; gap: 10px; margin-bottom: 20px; background: #f9f9f9; padding: 15px; border-radius: 5px; }
-        input { padding: 10px; border: 1px solid #ddd; border-radius: 4px; flex: 1; }
+        .form-inline { 
+            display: flex; 
+            gap: 10px; 
+            margin-bottom: 20px; 
+            background: #f9f9f9; 
+            padding: 15px; 
+            border-radius: 5px; 
+        }
+        input { 
+            padding: 10px; 
+            border: 1px solid #ddd; 
+            border-radius: 4px; 
+            flex: 1; 
+        }
         
         table { width: 100%; border-collapse: collapse; }
         th, td { text-align: left; padding: 12px; border-bottom: 1px solid #eee; }
+        
         .btn-add { background: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; }
         .btn-del { background: var(--danger); color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; }
     </style>
@@ -38,23 +63,23 @@
 <body>
 
     <header>
-    <div class="logo-area">
-        <img src="https://via.placeholder.com/40" alt="Logo"> 
-        ELENA'S AUTO SHOP
-    </div>
-    <div class="user-area">
-        <span id="display-user-name">Employee Name</span>
-        <button onclick="logout()" style="background:#ff4d4d; color:white; border:none; padding:5px 10px; cursor:pointer; border-radius:4px;">Logout</button>
-    </div>
-</header>
+        <div class="logo-area">
+            <img src="https://via.placeholder.com/35" alt="Logo"> 
+            ELENA'S AUTO SHOP
+        </div>
+        <div class="user-area">
+            <span id="display-user-name">Employee Name</span>
+            <button onclick="logout()" style="background:#ff4d4d; color:white; border:none; padding:5px 10px; cursor:pointer; border-radius:4px; margin-left: 10px;">Logout</button>
+        </div>
+    </header>
 
-<nav id="navbar">
-    <button id="nav-dash" onclick="location.href='dashboard.html'">Dashboard</button>
-    <button id="nav-new" onclick="location.href='new-customer.html'">New Customer</button>
-    <button id="nav-book" onclick="location.href='service-booking.html'">Service Booking</button>
-    <button id="nav-check" onclick="location.href='checkout.html'">Check Out</button>
-    <button id="admin-nav" class="admin-only" onclick="location.href='admin.html'">Admin Control</button>
-</nav>
+    <nav id="navbar">
+        <button onclick="location.href='dashboard.html'">Dashboard</button>
+        <button onclick="location.href='new-customer.html'">New Customer</button>
+        <button onclick="location.href='service-booking.html'">Service Booking</button>
+        <button onclick="location.href='checkout.html'">Check Out</button>
+        <button class="active" id="admin-nav-btn" onclick="location.href='admin.html'">Admin Control</button>
+    </nav>
 
     <div class="admin-nav">
         <button id="btn-mech" class="active-tab" onclick="showTab('mechanics')">Mechanics</button>
@@ -69,7 +94,10 @@
                 <input type="text" id="mech-name" placeholder="Mechanic Name">
                 <button class="btn-add" onclick="addItem('mechanics')">Add Mechanic</button>
             </div>
-            <table id="table-mechanics"><thead><tr><th>Name</th><th>Status</th><th>Action</th></tr></thead><tbody></tbody></table>
+            <table id="table-mechanics">
+                <thead><tr><th>Name</th><th>Status</th><th>Action</th></tr></thead>
+                <tbody></tbody>
+            </table>
         </div>
 
         <div id="tab-services" class="tab-content">
@@ -79,7 +107,10 @@
                 <input type="number" id="srv-price" placeholder="Price (₱)">
                 <button class="btn-add" onclick="addItem('services')">Add Service</button>
             </div>
-            <table id="table-services"><thead><tr><th>Service</th><th>Price</th><th>Action</th></tr></thead><tbody></tbody></table>
+            <table id="table-services">
+                <thead><tr><th>Service</th><th>Price</th><th>Action</th></tr></thead>
+                <tbody></tbody>
+            </table>
         </div>
 
         <div id="tab-inventory" class="tab-content">
@@ -89,22 +120,46 @@
                 <input type="number" id="inv-price" placeholder="Price (₱)">
                 <button class="btn-add" onclick="addItem('inventory')">Add Item</button>
             </div>
-            <table id="table-inventory"><thead><tr><th>Item</th><th>Price</th><th>Action</th></tr></thead><tbody></tbody></table>
+            <table id="table-inventory">
+                <thead><tr><th>Item</th><th>Price</th><th>Action</th></tr></thead>
+                <tbody></tbody>
+            </table>
         </div>
     </div>
 
+
+</body>
     <script type="module">
         import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
         const supabaseUrl = 'https://yrqtnaxnshkkizradtsd.supabase.co'
         const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlycXRuYXhuc2hra2l6cmFkdHNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3ODY5NTMsImV4cCI6MjA5MTM2Mjk1M30.dBveYrCJ24XIkyx6rc-iVaYkdOBGgsa-wuCV2shr1cY'
         const supabase = createClient(supabaseUrl, supabaseKey)
 
+        // Security Check
+        const user = JSON.parse(localStorage.getItem('currentUser'));
+        if (!user || user.manager_id !== null) {
+            alert("Access Denied: Admins Only");
+            window.location.href = 'dashboard.html';
+        } else {
+            // MATCHED ID: Using 'display-user-name' from HTML
+            document.getElementById('display-user-name').innerText = user.first_name + " " + user.last_name + " (Admin)";
+            loadData('mechanics');
+        }
+
+        // Logout
+        window.logout = () => {
+            localStorage.removeItem('currentUser');
+            window.location.href = 'login.html';
+        };
+
         // Tab Switching Logic
         window.showTab = (tabName) => {
             document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.admin-nav button').forEach(b => b.classList.remove('active-tab'));
             document.getElementById('tab-' + tabName).classList.add('active');
-            document.getElementById('btn-' + (tabName === 'mechanics' ? 'mech' : tabName === 'services' ? 'srv' : 'inv')).classList.add('active-tab');
+            
+            const btnId = tabName === 'mechanics' ? 'btn-mech' : tabName === 'services' ? 'btn-srv' : 'btn-inv';
+            document.getElementById(btnId).classList.add('active-tab');
             loadData(tabName);
         }
 
@@ -116,8 +171,13 @@
             if (table === 'inventory') payload = { item_name: document.getElementById('inv-name').value, price: document.getElementById('inv-price').value };
 
             const { error } = await supabase.from(table).insert([payload]);
-            if (!error) loadData(table);
-            else alert(error.message);
+            if (!error) {
+                // Clear inputs
+                if (table === 'mechanics') document.getElementById('mech-name').value = '';
+                else if (table === 'services') { document.getElementById('srv-name').value = ''; document.getElementById('srv-price').value = ''; }
+                else { document.getElementById('inv-name').value = ''; document.getElementById('inv-price').value = ''; }
+                loadData(table);
+            } else alert(error.message);
         }
 
         // Delete Data
@@ -141,16 +201,5 @@
                 </tr>
             `).join('');
         }
-
-        // Security Check
-        const user = JSON.parse(localStorage.getItem('currentUser'));
-        if (!user || user.manager_id !== null) {
-            alert("Access Denied: Admins Only");
-            window.location.href = 'dashboard.html';
-        } else {
-            document.getElementById('user-display').innerText = user.first_name + " " + user.last_name + " (Admin)";
-            loadData('mechanics');
-        }
     </script>
-</body>
 </html>
