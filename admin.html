@@ -144,10 +144,16 @@
     <strong>Search:</strong>
     <input type="text" id="srv-search" placeholder="Search services..." onkeyup="filterServices()">
 </div>
-            <table id="table-services">
-                <thead><tr><th>Service</th><th>Price</th><th>Action</th></tr></thead>
-                <tbody></tbody>
-            </table>
+<table id="table-services">
+    <thead>
+        <tr>
+            <th>Service Name</th>
+            <th>Price (₱)</th>
+            <th>Action</th>
+        </tr>
+    </thead>
+    <tbody></tbody>
+</table>
         </div>
 
         <div id="tab-inventory" class="tab-content">
@@ -161,10 +167,16 @@
     <strong>Search:</strong>
     <input type="text" id="inv-search" placeholder="Search inventory..." onkeyup="filterInventory()">
 </div>
-            <table id="table-inventory">
-                <thead><tr><th>Item</th><th>Price</th><th>Action</th></tr></thead>
-                <tbody></tbody>
-            </table>
+<table id="table-inventory">
+    <thead>
+        <tr>
+            <th>Item Name</th>
+            <th>Price (₱)</th>
+            <th>Action</th>
+        </tr>
+    </thead>
+    <tbody></tbody>
+</table>
         </div>
     </div>
 
@@ -250,27 +262,68 @@
         `).join('');
     }
 
-    function renderServicesTable(data) {
-        const tbody = document.querySelector(`#table-services tbody`);
-        tbody.innerHTML = data.map(item => `
-            <tr>
-                <td>${item.service_name}</td>
-                <td>₱${parseFloat(item.price).toFixed(2)}</td>
-                <td><button class="btn-del" onclick="deleteItem('services', ${item.id})">Delete</button></td>
-            </tr>
-        `).join('');
-    }
+function renderServicesTable(data) {
+    const tbody = document.querySelector(`#table-services tbody`);
+    tbody.innerHTML = data.map(s => `
+        <tr>
+            <td><input type="text" class="edit-input" id="edit-srv-name-${s.id}" value="${s.service_name}"></td>
+            <td><input type="number" class="edit-input" id="edit-srv-price-${s.id}" value="${s.price}"></td>
+            <td>
+                <button class="btn-save" onclick="saveService(${s.id})">Update</button>
+                <button class="btn-del" onclick="deleteItem('services', ${s.id})">Del</button>
+            </td>
+        </tr>
+    `).join('');
+}
 
-    function renderInventoryTable(data) {
-        const tbody = document.querySelector(`#table-inventory tbody`);
-        tbody.innerHTML = data.map(item => `
-            <tr>
-                <td>${item.item_name}</td>
-                <td>₱${parseFloat(item.price).toFixed(2)}</td>
-                <td><button class="btn-del" onclick="deleteItem('inventory', ${item.id})">Delete</button></td>
-            </tr>
-        `).join('');
+// --- SAVE FUNCTIONS ---
+
+window.saveService = async (id) => {
+    const name = document.getElementById(`edit-srv-name-${id}`).value;
+    const price = document.getElementById(`edit-srv-price-${id}`).value;
+
+    const { error } = await supabase
+        .from('services')
+        .update({ service_name: name, price: price })
+        .eq('id', id);
+
+    if (error) alert("Error updating service: " + error.message);
+    else {
+        alert("Service updated!");
+        loadData('services');
     }
+};
+
+window.saveInventory = async (id) => {
+    const name = document.getElementById(`edit-inv-name-${id}`).value;
+    const price = document.getElementById(`edit-inv-price-${id}`).value;
+
+    const { error } = await supabase
+        .from('inventory')
+        .update({ item_name: name, price: price })
+        .eq('id', id);
+
+    if (error) alert("Error updating inventory: " + error.message);
+    else {
+        alert("Inventory updated!");
+        loadData('inventory');
+    }
+};
+
+function renderInventoryTable(data) {
+    const tbody = document.querySelector(`#table-inventory tbody`);
+    tbody.innerHTML = data.map(i => `
+        <tr>
+            <td><input type="text" class="edit-input" id="edit-inv-name-${i.id}" value="${i.item_name}"></td>
+            <td><input type="number" class="edit-input" id="edit-inv-price-${i.id}" value="${i.price}"></td>
+            <td>
+                <button class="btn-save" onclick="saveInventory(${i.id})">Update</button>
+                <button class="btn-del" onclick="deleteItem('inventory', ${i.id})">Del</button>
+            </td>
+        </tr>
+    `).join('');
+}
+
 
     // --- FILTER FUNCTIONS ---
     window.filterMechanics = () => {
