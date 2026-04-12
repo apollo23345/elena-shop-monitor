@@ -86,46 +86,71 @@
         };
 
         // 2. REGISTRATION LOGIC
-        document.getElementById('regBtn').onclick = async () => {
-            const fname = document.getElementById('fname').value;
-            const lname = document.getElementById('lname').value;
-            const phone = document.getElementById('phone').value;
-            const plate = document.getElementById('plate').value;
-            const model = document.getElementById('car-model').value;
-            const status = document.getElementById('status');
+document.getElementById('regBtn').onclick = async () => {
+    const fname = document.getElementById('fname').value.trim();
+    const lname = document.getElementById('lname').value.trim();
+    const phone = document.getElementById('phone').value.trim();
+    const plate = document.getElementById('plate').value.trim().toUpperCase(); // Keep plates consistent
+    const model = document.getElementById('car-model').value.trim();
+    const status = document.getElementById('status');
 
-            if(!fname || !lname || !plate) return alert("Please fill in Name and Plate Number");
+    if(!fname || !lname || !plate) return alert("Please fill in Name and Plate Number");
 
-            status.innerText = "Registering Customer...";
+    status.innerText = "Checking records...";
 
-            // A. Insert Customer
-            const { data: custData, error: custErr } = await supabase
-                .from('customer')
-                .insert([{ firstname: fname, lastname: lname, contactnum: phone }])
-                .select();
+    // 1. CHECK IF THE CAR ALREADY EXISTS
+    const { data: existingCar, error: searchErr } = await supabase
+        .from('cars')
+        .select(`
+            plate_number, 
+            customer:customer_id (firstname, lastname)
+        `)
+        .eq('plate_number', plate)
+        .maybeSingle();
 
-            if (custErr) {
-                status.innerText = "Error: " + custErr.message;
-                return;
-            }
+    if (searchErr) {
+        status.innerText = "Error searching records: " + searchErr.message;
+        return;
+    }
 
-            // B. Insert Car linked to Customer
-            const customerId = custData[0].id;
-            const { error: carErr } = await supabase
-                .from('cars')
-                .insert([{ plate_number: plate, brand: model, customer_id: customerId }]);
+    // 2. IF CAR EXISTS: Just redirect to booking
+    if (existingCar) {
+        status.innerText = "Welcome back, " + existingCar.customer.firstname + "! Redirecting...";
+        setTimeout(() => {
+            window.location.href = `service-booking.html?plate=${plate}&name=${existingCar.customer.firstname}`;
+        }, 1200);
+        return; 
+    }
 
-            if (carErr) {
-                status.innerText = "Error saving car: " + carErr.message;
-            } else {
-                status.innerText = "Success! Redirecting to Booking...";
-                // C. Navigate to Service Booking and pass the Plate Number in the URL
-                setTimeout(() => {
-                    window.location.href = `service-booking.html?plate=${plate}&name=${fname}`;
-                }, 1500);
-            }
-        };
+    // 3. IF CAR IS NEW: Proceed with Registration
+    status.innerText = "New customer detected. Registering...";
 
+    // A. Insert Customer
+    const { data: custData, error: custErr } = await supabase
+        .from('customer')
+        .insert([{ firstname: fname, lastname: lname, contactnum: phone }])
+        .select();
+
+    if (custErr) {
+        status.innerText = "Error: " + custErr.message;
+        return;
+    }
+
+    // B. Insert Car linked to the new Customer
+    const customerId = custData[0].id;
+    const { error: carErr } = await supabase
+        .from('cars')
+        .insert([{ plate_number: plate, brand: model, customer_id: customerId }]);
+
+    if (carErr) {
+        status.innerText = "Error saving car: " + carErr.message;
+    } else {
+        status.innerText = "Registration Complete! Redirecting...";
+        setTimeout(() => {
+            window.location.href = `service-booking.html?plate=${plate}&name=${fname}`;
+        }, 1500);
+    }
+};
     </script>
 </body>
 </html>
