@@ -292,22 +292,47 @@ window.checkAlternatives = (val) => {
         updateSummary();
     };
 
-    window.finalizeBooking = async () => {
-        if(selectedItems.length === 0) return alert("Select at least one service!");
-        const insertData = selectedItems.map(item => ({
-            plate_number: plate,
-            item_type: item.type,
-            item_name: item.name,
-            price: item.price
-        }));
+window.finalizeBooking = async () => {
+    if(selectedItems.length === 0) return alert("Select at least one service!");
+    
+    // 1. Prepare transaction details
+    const insertData = selectedItems.map(item => ({
+        plate_number: plate,
+        item_type: item.type,
+        item_name: item.name,
+        price: item.price
+    }));
 
-        const { error } = await supabase.from('transaction_details').insert(insertData);
-        if(!error) {
-            window.location.href = `dashboard.html?plate=${plate}&name=${name}`;
-        } else {
-            alert("Error saving booking: " + error.message);
+    // 2. Insert into transactions
+    const { error: transError } = await supabase.from('transaction_details').insert(insertData);
+    
+    if (transError) {
+        alert("Error saving booking: " + transError.message);
+        return;
+    }
+
+    // 3. PERMANENTLY UPDATE INVENTORY STOCK
+    // We only care about items that are "Part" type
+    const partsToUpdate = selectedItems.filter(item => item.type === 'Part');
+
+    for (const part of partsToUpdate) {
+        // Find the current inventory record for this part
+        const invItem = inventoryData.find(i => i.id === part.id);
+        
+        if (invItem) {
+            // Update Supabase with the NEW quantity (the one we tracked in current_qty)
+            const { error: invError } = await supabase
+                .from('inventory')
+                .update({ stock_quantity: invItem.current_qty })
+                .eq('id', part.id);
+
+            if (invError) console.error(`Failed to update stock for ${part.name}:`, invError);
         }
-    };
+    }
+
+    // 4. Everything worked, go to dashboard
+    window.location.href = `dashboard.html?plate=${plate}&name=${name}`;
+};
 
     loadOptions();
 </script>
