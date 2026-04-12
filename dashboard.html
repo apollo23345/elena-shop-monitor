@@ -99,6 +99,7 @@
 </div>
 </body>
 
+</body>
 <script type="module">
     // 1. IDENTITY CHECK
     const user = JSON.parse(localStorage.getItem('currentUser'));
@@ -134,23 +135,29 @@
 
     async function loadDashboard() {
         const { data: bays } = await supabase.from('bays').select('*').order('id');
-        const { data: mechs } = await supabase.from('mechanics').select('*').order('name');
+        // FIX: Order by first_name since 'name' column is gone
+        const { data: mechs } = await supabase.from('mechanics').select('*').order('first_name');
         
         // Render Mechanics Tags
         const mechList = document.getElementById('mechanic-list');
-        mechList.innerHTML = mechs.map(m => `
-            <div class="mech-tag ${m.status.toLowerCase()}">
-                <span class="status-dot"></span>
-                <strong>${m.name}</strong> 
-                <small style="color:#666">(${m.status})</small>
-            </div>
-        `).join('');
+        mechList.innerHTML = mechs.map(m => {
+            // FIX: Combine first and last name
+            const fullName = `${m.first_name} ${m.last_name}`;
+            return `
+                <div class="mech-tag ${m.status.toLowerCase().replace(' ', '-')}">
+                    <span class="status-dot"></span>
+                    <strong>${fullName}</strong> 
+                    <small style="color:#666">(${m.status})</small>
+                </div>
+            `;
+        }).join('');
 
         // Render Bays Cards
         const grid = document.getElementById('bay-grid');
         grid.innerHTML = bays.map(bay => {
             const assignedMech = mechs.find(m => m.id == bay.current_mechanic_id);
-            const mechName = assignedMech ? assignedMech.name : "Unassigned";
+            // FIX: Use combined name here too
+            const mechName = assignedMech ? `${assignedMech.first_name} ${assignedMech.last_name}` : "Unassigned";
 
             return `
                 <div class="bay-card ${bay.status.toLowerCase()}" onclick="handleBayClick(${bay.id}, '${bay.status}', '${bay.bay_name}')">
@@ -173,42 +180,45 @@
         if (status === 'Available' && plate) {
             selectedBayId = id;
             document.getElementById('target-bay').innerText = bayName;
+            // Only show mechanics who are 'Available'
             const { data: mechs } = await supabase.from('mechanics').select('*').eq('status', 'Available');
-            document.getElementById('mech-select').innerHTML = mechs.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
+            
+            if (mechs.length === 0) {
+                document.getElementById('mech-select').innerHTML = '<option value="">No Mechanics Available</option>';
+            } else {
+                document.getElementById('mech-select').innerHTML = mechs.map(m => 
+                    `<option value="${m.id}">${m.first_name} ${m.last_name}</option>`
+                ).join('');
+            }
             document.getElementById('modal').style.display = 'flex';
         }
     };
 
-window.confirmAssignment = async () => {
-    const mechId = document.getElementById('mech-select').value;
-    if(!mechId) { alert("Please select a mechanic"); return; }
+    window.confirmAssignment = async () => {
+        const mechId = document.getElementById('mech-select').value;
+        if(!mechId) { alert("Please select a mechanic"); return; }
 
-    // 1. Update Bay (Ensure current_mechanic_id exists in Supabase first!)
-    const { error: bayError } = await supabase.from('bays').update({ 
-        status: 'Occupied', 
-        current_plate: plate, 
-        current_customer: name,
-        current_mechanic_id: mechId 
-    }).eq('id', selectedBayId);
+        // 1. Update Bay
+        const { error: bayError } = await supabase.from('bays').update({ 
+            status: 'Occupied', 
+            current_plate: plate, 
+            current_customer: name,
+            current_mechanic_id: mechId 
+        }).eq('id', selectedBayId);
 
-    if (bayError) {
-        console.error("Bay Update Error:", bayError);
-        alert("Database Error: Make sure 'current_mechanic_id' column exists in your Supabase 'bays' table.");
-        return;
-    }
+        if (bayError) {
+            console.error("Bay Update Error:", bayError);
+            alert("Error updating bay. Check console.");
+            return;
+        }
 
-    // 2. Update Mechanic Status
-    const { error: mechError } = await supabase.from('mechanics').update({ 
-        status: 'Busy' 
-    }).eq('id', mechId);
+        // 2. Update Mechanic Status to 'Busy'
+        const { error: mechError } = await supabase.from('mechanics').update({ 
+            status: 'Busy' 
+        }).eq('id', mechId);
 
-    if (mechError) {
-        alert("Mechanic updated failed, but bay was assigned.");
-    }
-
-    // 3. Force a clean refresh to the dashboard without the URL parameters
-    window.location.href = 'dashboard.html';
-};
+        window.location.href = 'dashboard.html';
+    };
 
     window.releaseBay = async (id) => {
         if(!confirm("Are you sure this job is finished?")) return;
@@ -221,6 +231,7 @@ window.confirmAssignment = async () => {
 
         if (!bay) return;
 
+        // Reset Bay
         await supabase.from('bays').update({ 
             status: 'Available', 
             current_plate: null, 
@@ -228,6 +239,7 @@ window.confirmAssignment = async () => {
             current_mechanic_id: null 
         }).eq('id', id);
 
+        // Set Mechanic back to Available
         if (bay.current_mechanic_id) {
             await supabase.from('mechanics').update({ status: 'Available' }).eq('id', bay.current_mechanic_id);
         }
@@ -238,5 +250,4 @@ window.confirmAssignment = async () => {
     window.closeModal = () => document.getElementById('modal').style.display = 'none';
     loadDashboard();
 </script>
-</body>
 </html>
