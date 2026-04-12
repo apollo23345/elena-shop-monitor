@@ -9,7 +9,19 @@
         /* HEADER & NAVBAR */
         header { background: white; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ddd; }
         .logo-area { display: flex; align-items: center; gap: 10px; font-weight: bold; font-size: 1.2em; }
-        .user-area { display: flex; align-items: center; gap: 15px; }
+        /* Update this specific section in your CSS */
+        .user-area { 
+          display: flex; 
+          align-items: center; 
+          gap: 15px; 
+           white-space: nowrap; /* This prevents the name from wrapping to a second line */
+        }
+
+        #display-user-name { 
+           font-weight: 500; 
+          color: var(--dark);
+            display: inline-block; /* Forces the span to behave like a single block of text */
+        }
         nav { background: var(--dark); padding: 10px; display: flex; gap: 10px; justify-content: center; }
         nav button { background: transparent; color: white; border: 1px solid white; padding: 8px 15px; cursor: pointer; border-radius: 4px; }
         nav button:hover, nav button.active { background: var(--primary); border-color: var(--primary); }
@@ -73,13 +85,13 @@
     </div>
     <script type="module">
         // 1. IDENTITY CHECK
-const user = JSON.parse(localStorage.getItem('currentUser'));
-if (!user) {
-    window.location.href = 'login.html';
-} else {
-    document.getElementById('display-user-name').innerText = user.first_name + " " + user.last_name;
-    // Show Admin button only if manager_id is null
-    if (user.manager_id === null) {
+        const user = JSON.parse(localStorage.getItem('currentUser'));
+        if (!user) {
+       window.location.href = 'login.html';
+        } else {
+        document.getElementById('display-user-name').innerText = user.first_name + " " + user.last_name;
+       // Show Admin button only if manager_id is null
+      if (user.manager_id === null) {
         document.getElementById('admin-nav').style.display = 'block';
     }
 }
