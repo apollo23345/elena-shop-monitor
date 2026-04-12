@@ -98,13 +98,10 @@ document.getElementById('regBtn').onclick = async () => {
 
     status.innerText = "Checking records...";
 
-    // 1. CHECK IF THE CAR ALREADY EXISTS
+// 1. CHECK IF THE CAR ALREADY EXISTS (Simplified)
     const { data: existingCar, error: searchErr } = await supabase
         .from('cars')
-        .select(`
-            plate_number, 
-            customer:customer_id (firstname, lastname)
-        `)
+        .select('plate_number, customer_id') // Just get the basics first
         .eq('plate_number', plate)
         .maybeSingle();
 
@@ -113,15 +110,23 @@ document.getElementById('regBtn').onclick = async () => {
         return;
     }
 
-    // 2. IF CAR EXISTS: Just redirect to booking
+    // 2. IF CAR EXISTS: Get the customer name separately to avoid the JSON error
     if (existingCar) {
-        status.innerText = "Welcome back, " + existingCar.customer.firstname + "! Redirecting...";
+        const { data: custInfo } = await supabase
+            .from('customer')
+            .select('firstname')
+            .eq('id', existingCar.customer_id)
+            .single();
+
+        const welcomeName = custInfo ? custInfo.firstname : "Valued Customer";
+        
+        status.innerText = "Welcome back, " + welcomeName + "! Redirecting...";
         setTimeout(() => {
-            window.location.href = `service-booking.html?plate=${plate}&name=${existingCar.customer.firstname}`;
+            window.location.href = `service-booking.html?plate=${plate}&name=${welcomeName}`;
         }, 1200);
         return; 
     }
-
+    
     // 3. IF CAR IS NEW: Proceed with Registration
     status.innerText = "New customer detected. Registering...";
 
