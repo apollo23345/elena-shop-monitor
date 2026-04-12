@@ -96,24 +96,17 @@
     
     <hr>
     
-<label>Type/Select Parts/Inventory</label>
-<input list="part-options" id="part-select-input" oninput="window.checkAlternatives(this.value)" placeholder="Start typing a part...">
-<datalist id="part-options"></datalist>
+    <label>Type/Select Parts/Inventory</label>
+    <div style="display: flex; gap: 5px;">
+        <input list="part-options" id="part-select-input" oninput="window.checkAlternatives(this.value)" placeholder="Search part..." style="flex: 3;">
+        <input type="number" id="part-qty-input" value="1" min="1" style="flex: 1;" placeholder="Qty">
+    </div>
 
-<button onclick="addItem('Part')">Add Part</button>
+    <button onclick="addItem('Part')">Add Part</button>
 
-<div id="alt-suggestion-box" style="
-    font-size: 0.85em; 
-    color: #555; 
-    margin-top: 10px; 
-    font-style: italic; 
-    max-height: 120px; 
-    overflow-y: auto; 
-    border-left: 3px solid #2ecc71; 
-    padding-left: 10px;
-"></div>
-
+    <div id="alt-suggestion-box" style="font-size: 0.85em; color: #555; margin-top: 10px; font-style: italic; max-height: 120px; overflow-y: auto; border-left: 3px solid #2ecc71; padding-left: 10px;"></div>
 </div>
+
 
         <div class="card">
             <h3>Job Summary</h3>
@@ -185,42 +178,38 @@ function renderDatalists() {
 window.addItem = (type) => {
     const inputId = type === 'Service' ? 'service-select-input' : 'part-select-input';
     const input = document.getElementById(inputId);
-    
-    // Cleanly get the name
     let typedValue = input.value.split(/\s*\(/)[0].trim().toLowerCase(); 
 
     if (type === 'Service') {
         const found = serviceData.find(s => s.service_name.toLowerCase() === typedValue);
         if (!found) return alert("Service not found!");
 
-        // DUPLICATE CHECK: See if this service name is already in our summary list
-        const isAlreadySelected = selectedItems.some(item => 
-            item.type === 'Service' && item.name.toLowerCase() === typedValue
-        );
+        const isAlreadySelected = selectedItems.some(item => item.type === 'Service' && item.name.toLowerCase() === typedValue);
+        if (isAlreadySelected) return alert("Service already added!");
 
-        if (isAlreadySelected) {
-            alert("ALREADY ADDED: This service is already in your booking summary!");
-            return; // Exit without clearing the input
-        }
-
-        selectedItems.push({ type, name: found.service_name, price: found.price, id: found.id });
+        selectedItems.push({ type, name: found.service_name, price: found.price, id: found.id, qty: 1 });
     } else {
+        const qtyInput = document.getElementById('part-qty-input');
+        const qtyToAdd = parseInt(qtyInput.value);
         const found = inventoryData.find(i => i.item_name.trim().toLowerCase() === typedValue);
         
-        if (!found) return alert("Part not found in inventory!");
-        
-        // IF OUT OF STOCK: Exit early
-        if (found.current_qty <= 0) {
-            alert("OUT OF STOCK: You cannot add this part. Check the alternatives still visible in the list below!");
-            return; 
+        if (!found) return alert("Part not found!");
+        if (qtyToAdd < 1) return alert("Minimum quantity is 1");
+        if (found.current_qty < qtyToAdd) return alert(`Not enough stock! Only ${found.current_qty} left.`);
+
+        // MERGE LOGIC: Check if this part ID is already in our list
+        const existingIndex = selectedItems.findIndex(item => item.id === found.id && item.type === 'Part');
+
+        if (existingIndex > -1) {
+            selectedItems[existingIndex].qty += qtyToAdd;
+        } else {
+            selectedItems.push({ type, name: found.item_name, price: found.price, id: found.id, qty: qtyToAdd });
         }
 
-        // IF IN STOCK: Proceed with adding
-        found.current_qty--; 
-        selectedItems.push({ type, name: found.item_name, price: found.price, id: found.id });
+        found.current_qty -= qtyToAdd; 
+        qtyInput.value = "1"; // Reset quantity box to 1
     }
 
-    // Success path: Clear UI and refresh
     input.value = ''; 
     document.getElementById('alt-suggestion-box').innerHTML = ""; 
     renderDatalists(); 
@@ -264,72 +253,69 @@ window.checkAlternatives = (val) => {
 };
 
 
-    window.updateSummary = () => {
-        const list = document.getElementById('booking-list');
-        let total = 0;
-        list.innerHTML = selectedItems.map((item, index) => {
-            total += item.price;
-            return `
-                <li class="summary-item">
-                    <span>${item.name}</span> 
-                    <span>
-                        ₱${item.price} 
-                        <button onclick="removeItem(${index})" style="background:none; color:red; border:none; cursor:pointer; margin-left:10px;">✕</button>
-                    </span>
-                </li>`;
-        }).join('');
-        document.getElementById('total-price').innerText = total;
-    };
+window.updateSummary = () => {
+    const list = document.getElementById('booking-list');
+    let total = 0;
+    list.innerHTML = selectedItems.map((item, index) => {
+        const itemTotal = item.price * item.qty;
+        total += itemTotal;
+        
+        // Displays name + quantity (e.g., Oil Filter x3)
+        const displayLabel = item.type === 'Part' && item.qty > 1 ? `${item.name} <b>x${item.qty}</b>` : item.name;
 
-    window.removeItem = (index) => {
-        const item = selectedItems[index];
-        if (item.type === 'Part') {
-            const found = inventoryData.find(i => i.id === item.id);
-            if (found) found.current_qty++;
-        }
-        selectedItems.splice(index, 1);
-        renderDatalists();
-        updateSummary();
-    };
+        return `
+            <li class="summary-item">
+                <span>${displayLabel}</span> 
+                <span>
+                    ₱${itemTotal.toLocaleString()} 
+                    <button onclick="removeItem(${index})" style="background:none; color:red; border:none; cursor:pointer; margin-left:10px;">✕</button>
+                </span>
+            </li>`;
+    }).join('');
+    document.getElementById('total-price').innerText = total.toLocaleString();
+};
+
+window.removeItem = (index) => {
+    const item = selectedItems[index];
+    if (item.type === 'Part') {
+        const found = inventoryData.find(i => i.id === item.id);
+        if (found) found.current_qty += item.qty; // Return full quantity to local stock
+    }
+    selectedItems.splice(index, 1);
+    renderDatalists();
+    updateSummary();
+};
 
 window.finalizeBooking = async () => {
-    if (selectedItems.length === 0) return alert("Select at least one service!");
+    if(selectedItems.length === 0) return alert("Select at least one service!");
+    
+    // Flatten the merged items back into individual rows for transaction_details 
+    // This ensures checkout.html sees 3 items if you selected x3
+    const insertData = [];
+    selectedItems.forEach(item => {
+        for(let i = 0; i < item.qty; i++) {
+            insertData.push({
+                plate_number: plate,
+                item_type: item.type,
+                item_name: item.name,
+                price: item.price
+            });
+        }
+    });
 
-    // 1. Prepare data for insertion
-    const insertData = selectedItems.map(item => ({
-        plate_number: plate,
-        item_type: item.type, // 'Service' or 'Part'
-        item_name: item.name,
-        price: item.price,
-        qty: item.quantity || 1 // This matches your new DB column 'qty'
-    }));
-
-    // 2. Insert into Supabase
-    // Note: I changed the variable name below to 'transError' to match your 'if' check
     const { error: transError } = await supabase.from('transaction_details').insert(insertData);
+    if (transError) return alert("Error saving booking: " + transError.message);
 
-    if (transError) {
-        alert("Error saving booking: " + transError.message);
-        return;
-    }
-
-    // 3. PERMANENTLY UPDATE INVENTORY STOCK
+    // Update Supabase Stock
     const partsToUpdate = selectedItems.filter(item => item.type === 'Part');
-
     for (const part of partsToUpdate) {
         const invItem = inventoryData.find(i => i.id === part.id);
         if (invItem) {
-            const { error: invError } = await supabase
-                .from('inventory')
-                .update({ stock_quantity: invItem.current_qty })
-                .eq('id', part.id);
-
-            if (invError) console.error(`Failed to update stock for ${part.name}:`, invError);
+            await supabase.from('inventory').update({ stock_quantity: invItem.current_qty }).eq('id', part.id);
         }
     }
 
-    // 4. Success! Redirect
-    window.location.href = `dashboard.html?plate=${plate}&name=${encodeURIComponent(name)}`;
+    window.location.href = `dashboard.html?plate=${plate}&name=${name}`;
 };
     loadOptions();
 </script>
