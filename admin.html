@@ -222,7 +222,7 @@
     let allInventory = [];
     let allReceipts = [];
 
-    // Security & Init - Wrap in DOMContentLoaded to ensure tables exist
+    // --- INITIALIZATION ---
     document.addEventListener('DOMContentLoaded', () => {
         const user = JSON.parse(localStorage.getItem('currentUser'));
         if (!user || user.manager_id !== null) {
@@ -230,18 +230,28 @@
             window.location.href = 'dashboard.html';
         } else {
             document.getElementById('display-user-name').innerText = user.first_name + " " + user.last_name + " (Admin)";
-            // Load all data into memory immediately so search/sync works
             loadData('mechanics'); 
-            loadData('services');
+            loadData('services'); // This will call 'service' table internally
             loadData('inventory');
         }
     });
 
-    window.logout = () => {
-        localStorage.removeItem('currentUser');
-        window.location.href = 'login.html';
-    };
+    // --- CORE DATA LOADING ---
+    async function loadData(table) {
+        // Fix: Use 'service' table for services tab
+        const targetTable = table === 'services' ? 'service' : (table === 'receipts' ? 'transactions' : table);
+        
+        const { data, error } = await supabase.from(targetTable).select('*').order('created_at', { ascending: false });
+        
+        if (error) return console.error("Error fetching " + targetTable, error);
 
+        if (table === 'mechanics') { allMechanics = data; renderMechanicsTable(data); }
+        else if (table === 'services') { allServices = data; renderServicesTable(data); } 
+        else if (table === 'inventory') { allInventory = data; renderInventoryTable(data); }
+        else if (table === 'transactions' || table === 'receipts') { allReceipts = data; renderReceiptsTable(data); }
+    }
+
+    // --- WINDOW EXPORTS (Makes buttons clickable) ---
     window.showTab = (tabName) => {
         document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
         document.querySelectorAll('.admin-nav button').forEach(b => b.classList.remove('active-tab'));
@@ -251,31 +261,104 @@
         const targetBtn = document.getElementById(btnId);
         if (targetBtn) targetBtn.classList.add('active-tab');
         
-        // Refresh data for the specific tab being opened
-        if (tabName === 'receipts') {
-            loadData('transactions');
-        } else {
-            loadData(tabName);
+        loadData(tabName);
+    };
+
+    window.addItem = async (table) => {
+        if (table === 'inventory') {
+            const name = document.getElementById('inv-name').value;
+            const price = document.getElementById('inv-price').value;
+            const qty = document.getElementById('inv-qty').value;
+            const { error } = await supabase.from('inventory').insert([{ item_name: name, price: price, stock_quantity: qty }]);
+            if (error) alert(error.message);
+        } else if (table === 'services') {
+            const name = document.getElementById('srv-name').value;
+            const price = document.getElementById('srv-price').value;
+            // Fix: Use 'servicetype' and 'serviceprice' columns
+            const { error } = await supabase.from('service').insert([{ servicetype: name, serviceprice: price }]);
+            if (error) alert(error.message);
+        } else if (table === 'mechanics') {
+            const first = document.getElementById('mech-first').value;
+            const last = document.getElementById('mech-last').value;
+            const { error } = await supabase.from('mechanics').insert([{ first_name: first, last_name: last }]);
+            if (error) alert(error.message);
         }
-    }
+        loadData(table);
+    };
 
-// In loadData(table)
-async function loadData(table) {
-    // When the tab calls 'services', we redirect to the 'service' table
-    const targetTable = table === 'services' ? 'service' : table; 
-    const { data, error } = await supabase.from(targetTable).select('*').order('created_at', { ascending: false });
-    
-    if (error) return console.error("Error fetching " + targetTable, error);
+    window.saveService = async (id) => {
+        const name = document.getElementById(`edit-srv-name-${id}`).value;
+        const price = document.getElementById(`edit-srv-price-${id}`).value;
+        // Fix: Update correct columns
+        await supabase.from('service').update({ servicetype: name, serviceprice: price }).eq('id', id);
+        loadData('services');
+    };
 
-    if (table === 'mechanics') { allMechanics = data; renderMechanicsTable(data); }
-    else if (table === 'services') { allServices = data; renderServicesTable(data); } // allServices now holds 'service' data
-        else if (table === 'inventory') { allInventory = data; renderInventoryTable(data); }
-        else if (table === 'transactions') { allReceipts = data; renderReceiptsTable(data); }
-    }
+    window.saveMechanic = async (id) => {
+        const first = document.getElementById(`edit-first-${id}`).value;
+        const last = document.getElementById(`edit-last-${id}`).value;
+        const contact = document.getElementById(`edit-contact-${id}`).value;
+        const status = document.getElementById(`edit-status-${id}`).value;
+        await supabase.from('mechanics').update({ first_name: first, last_name: last, contact: contact, status: status }).eq('id', id);
+        loadData('mechanics');
+    };
+
+    window.deleteItem = async (table, id) => {
+        if(confirm("Are you sure?")) {
+            const targetTable = table === 'services' ? 'service' : table;
+            const { error } = await supabase.from(targetTable).delete().eq('id', id);
+            if (error) alert(error.message);
+            loadData(table);
+        }
+    };
+
+    window.logout = () => {
+        localStorage.removeItem('currentUser');
+        window.location.href = 'login.html';
+    };
 
     // --- RENDER FUNCTIONS ---
+    function renderMechanicsTable(data) {
+        const tbody = document.querySelector(`#table-mechanics tbody`);
+        if (!tbody) return;
+        tbody.innerHTML = data.map(m => `
+            <tr>
+                <td><input type="text" class="edit-input" id="edit-first-${m.id}" value="${m.first_name}"></td>
+                <td><input type="text" class="edit-input" id="edit-last-${m.id}" value="${m.last_name}"></td>
+                <td><input type="text" class="edit-input" id="edit-contact-${m.id}" value="${m.contact || ''}"></td>
+                <td>
+                    <select id="edit-status-${m.id}">
+                        <option value="Available" ${m.status === 'Available' ? 'selected' : ''}>Available</option>
+                        <option value="Busy" ${m.status === 'Busy' ? 'selected' : ''}>Busy</option>
+                        <option value="Off-duty" ${m.status === 'Off-duty' ? 'selected' : ''}>Off-duty</option>
+                    </select>
+                </td>
+                <td>
+                    <button class="btn-save" onclick="saveMechanic(${m.id})">Update</button>
+                    <button class="btn-del" onclick="deleteItem('mechanics', ${m.id})">Del</button>
+                </td>
+            </tr>
+        `).join('');
+    }
 
-    function renderReceiptsTable(data) {
+    function renderServicesTable(data) {
+        const tbody = document.querySelector(`#table-services tbody`);
+        if (!tbody) return;
+        tbody.innerHTML = data.map(s => `
+            <tr>
+                <td><input type="text" class="edit-input" id="edit-srv-name-${s.id}" value="${s.servicetype}"></td>
+                <td><input type="number" class="edit-input" id="edit-srv-price-${s.id}" value="${s.serviceprice}"></td>
+                <td>
+                    <button class="btn-save" onclick="saveService('${s.id}')">Update</button>
+                    <button class="btn-del" onclick="deleteItem('services', '${s.id}')">Del</button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+
+
+function renderReceiptsTable(data) {
         const tbody = document.querySelector(`#table-receipts tbody`);
         if (!tbody) return;
         
