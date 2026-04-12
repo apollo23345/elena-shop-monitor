@@ -196,7 +196,10 @@
         input.value = ''; 
         renderDatalists(); 
         updateSummary(); 
+        // Add this at the very bottom of window.addItem
+document.getElementById('alt-suggestion-box').innerHTML = "";
     };
+    
 
     function updateSummary() {
         const list = document.getElementById('booking-list');
@@ -218,24 +221,33 @@
 
 window.checkAlternatives = (val) => {
     const suggestionBox = document.getElementById('alt-suggestion-box');
-    suggestionBox.innerText = ""; // Clear box
-
+    
+    // Clean the input (removes the Stock info)
     const typedName = val.split(' (Stock:')[0].trim();
+    
+    // Find the item in our local data
     const currentItem = inventoryData.find(i => i.item_name === typedName);
 
-    // If the item exists and belongs to a group
-    if (currentItem && currentItem.oem_ref_id) {
-        // Find ALL items in the inventory that share this same group ID
-        // but EXCLUDE the item we just typed
-        const alternatives = inventoryData.filter(i => 
-            i.oem_ref_id === currentItem.oem_ref_id && 
-            i.item_name !== currentItem.item_name
-        );
+    // If no item is found or it has no group, hide the box
+    if (!currentItem || !currentItem.oem_ref_id) {
+        suggestionBox.innerHTML = "";
+        return;
+    }
 
-        if (alternatives.length > 0) {
-            const names = alternatives.map(a => `${a.item_name} (₱${a.price})`).join(', ');
-            suggestionBox.innerText = `💡 Group Alternatives: ${names}`;
-        }
+    // Find ALL items in the inventory that share this same group ID
+    const alternatives = inventoryData.filter(i => 
+        i.oem_ref_id === currentItem.oem_ref_id && 
+        i.item_name !== currentItem.item_name
+    );
+
+    if (alternatives.length > 0) {
+        const names = alternatives.map(a => 
+            `<b style="color: #27ae60;">${a.item_name}</b> (₱${a.price})`
+        ).join(', ');
+        
+        suggestionBox.innerHTML = `💡 Alternatives: ${names}`;
+    } else {
+        suggestionBox.innerHTML = "";
     }
 };
 
