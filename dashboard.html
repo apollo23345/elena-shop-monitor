@@ -27,6 +27,12 @@
             cursor: not-allowed;
             pointer-events: none;
         }
+        /* Disable Finish Job buttons when an assignment is pending */
+.nav-locked .btn-finish {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
         .btn-cancel-pending {
             background: #ff4d4d;
             color: white;
@@ -176,25 +182,26 @@ window.cancelPendingTransaction = async () => {
         `).join('');
 
         const grid = document.getElementById('bay-grid');
-        grid.innerHTML = bays.map(bay => {
-            const assignedMech = mechs.find(m => m.id == bay.current_mechanic_id);
-            const mechName = assignedMech ? `${assignedMech.first_name} ${assignedMech.last_name}` : "Unassigned";
+// ... inside loadDashboard()
+grid.innerHTML = bays.map(bay => {
+    const assignedMech = mechs.find(m => m.id == bay.current_mechanic_id);
+    const mechName = assignedMech ? `${assignedMech.first_name} ${assignedMech.last_name}` : "Unassigned";
 
-            return `
-                <div class="bay-card ${bay.status.toLowerCase()}" onclick="handleBayClick(${bay.id}, '${bay.status}', '${bay.bay_name}')">
-                    <div class="sticker">${bay.status.toUpperCase()}</div>
-                    <h2>${bay.bay_name}</h2>
-                    ${bay.status === 'Occupied' ? `
-                        <div style="background: #f9f9f9; padding: 10px; border-radius: 8px; margin-top: 10px; text-align: left;">
-                            <p><strong>👤 Customer:</strong> ${bay.current_customer}</p>
-                            <p style="font-size: 0.9em; color: #666;">🚗 ${bay.current_plate}</p>
-                            <p style="font-size: 0.9em; color: var(--primary);">🔧 <strong>Mechanic:</strong> ${mechName}</p>
-                        </div>
-                        <button onclick="event.stopPropagation(); releaseBay(${bay.id})" style="margin-top:10px; background:#ff4d4d; color:white; border:none; padding:8px; border-radius:4px; cursor:pointer; width: 100%;">Finish Job</button>
-                    ` : '<p style="color:#aaa; margin-top:10px;">Empty / Ready</p>'}
+    return `
+        <div class="bay-card ${bay.status.toLowerCase()}" onclick="handleBayClick(${bay.id}, '${bay.status}', '${bay.bay_name}')">
+            <div class="sticker">${bay.status.toUpperCase()}</div>
+            <h2>${bay.bay_name}</h2>
+            ${bay.status === 'Occupied' ? `
+                <div style="background: #f9f9f9; padding: 10px; border-radius: 8px; margin-top: 10px; text-align: left;">
+                    <p><strong>👤 Customer:</strong> ${bay.current_customer}</p>
+                    <p style="font-size: 0.9em; color: #666;">🚗 ${bay.current_plate}</p>
+                    <p style="font-size: 0.9em; color: var(--primary);">🔧 <strong>Mechanic:</strong> ${mechName}</p>
                 </div>
-            `;
-        }).join('');
+                <button class="btn-finish" onclick="event.stopPropagation(); releaseBay(${bay.id})" style="margin-top:10px; background:#ff4d4d; color:white; border:none; padding:8px; border-radius:4px; cursor:pointer; width: 100%;">Finish Job</button>
+            ` : '<p style="color:#aaa; margin-top:10px;">Empty / Ready</p>'}
+        </div>
+    `;
+}).join('');
     }
 
     window.handleBayClick = async (id, status, bayName) => {
@@ -224,6 +231,11 @@ window.cancelPendingTransaction = async () => {
     };
 
     window.releaseBay = async (id) => {
+        // BUG FIX: Prevent releasing a bay if we are in the middle of an assignment
+    if (plate) {
+        alert("Please finish or cancel the current assignment before finishing other jobs.");
+        return;
+    }
         if(!confirm("Are you sure this job is finished?")) return;
         const { data: bay } = await supabase.from('bays').select('*').eq('id', id).single();
         if (!bay) return;
