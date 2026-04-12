@@ -79,13 +79,19 @@
             if (user.manager_id === null) {
                 document.getElementById('admin-nav').style.display = 'block';
             }
-
+            
 // 2. LOGOUT FUNCTION
 window.logout = () => {
     localStorage.removeItem('currentUser');
     window.location.href = 'login.html';
 };
 
+// 3. HIGHLIGHT CURRENT PAGE
+const currentPage = window.location.pathname.split("/").pop();
+if(currentPage === 'dashboard.html') document.getElementById('nav-dash').classList.add('active');
+if(currentPage === 'new-customer.html') document.getElementById('nav-cust').classList.add('active');
+if(currentPage === 'service-booking.html') document.getElementById('nav-book').classList.add('active');
+if(currentPage === 'checkout.html') document.getElementById('nav-check').classList.add('active');
 
         import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
         const supabaseUrl = 'https://yrqtnaxnshkkizradtsd.supabase.co'
