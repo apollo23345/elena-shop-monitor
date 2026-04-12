@@ -280,8 +280,18 @@ function renderReceiptsTable(data) {
         const date = new Date(r.created_at).toLocaleDateString();
         // Check if items_json exists and is an array before mapping
         const items = Array.isArray(r.items_json) ? r.items_json : [];
-        const itemPreview = items.map(i => i.item_name).join(', ');
-        
+
+
+            // GROUPING LOGIC FOR RECEIPT HISTORY
+            const grouped = rawItems.reduce((acc, item) => {
+                acc[item.item_name] = (acc[item.item_name] || 0) + 1;
+                return acc;
+            }, {});
+
+            const itemPreview = Object.entries(grouped)
+                .map(([name, qty]) => `${name}${qty > 1 ? ' x' + qty : ''}`)
+                .join(', ');
+
         return `
             <tr>
                 <td>${date}</td>
