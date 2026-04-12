@@ -162,9 +162,10 @@
         <input type="text" id="inv-name" placeholder="Item Name">
         <input type="number" id="inv-price" placeholder="Price (₱)">
         <input type="number" id="inv-qty" placeholder="Qty">
-        <input list="alt-items" id="inv-alt-search" placeholder="Search Alternative for OEM..." oninput="syncOEMRef(this, 'add')">
-        <datalist id="alt-items"></datalist>
-        <input type="hidden" id="inv-oem-id"> <button class="btn-add" onclick="addItem('inventory')">Add Item</button>
+<input list="alt-items" id="inv-alt-search" placeholder="Search Alt (Leave blank for None)..." oninput="syncOEMRef(this, 'add')">
+<datalist id="alt-items">
+    </datalist>
+            <input type="hidden" id="inv-oem-id"> <button class="btn-add" onclick="addItem('inventory')">Add Item</button>
     </div>
 
     <div class="search-container">
@@ -324,11 +325,17 @@ window.saveService = async (id) => {
     }
 };
 
+// --- UPDATED SAVE FUNCTION ---
 window.saveInventory = async (id) => {
     const name = document.getElementById(`edit-inv-name-${id}`).value;
     const price = document.getElementById(`edit-inv-price-${id}`).value;
     const qty = document.getElementById(`edit-inv-qty-${id}`).value;
-    const oem = document.getElementById(`edit-inv-oem-${id}`).value;
+    let oem = document.getElementById(`edit-inv-oem-${id}`).value;
+
+    // If the user cleared the OEM field, default it back to its own ID
+    if (!oem || oem.trim() === "") {
+        oem = id;
+    }
 
     const { error } = await supabase
         .from('inventory')
@@ -399,23 +406,91 @@ function renderInventoryTable(data) {
 const originalAddItem = window.addItem;
 window.addItem = async (table) => {
     if (table === 'inventory') {
-        const payload = {
-            item_name: document.getElementById('inv-name').value,
-            price: document.getElementById('inv-price').value,
-            stock_quantity: document.getElementById('inv-qty').value,
-            oem_ref_id: document.getElementById('inv-oem-id').value || null
-        };
-        const { error } = await supabase.from('inventory').insert([payload]);
-        if (!error) {
-            document.getElementById('inv-name').value = '';
-            document.getElementById('inv-price').value = '';
-            document.getElementById('inv-qty').value = '';
-            document.getElementById('inv-alt-search').value = '';
-            document.getElementById('inv-oem-id').value = '';
-            loadData('inventory');
-        } else alert(error.message);
+        const name = document.getElementById('inv-name').value;
+        const price = document.getElementById('inv-price').value;
+        const qty = document.getElementById('inv-qty').value;
+        const pickedOemId = document.getElementById('inv-oem-id').value;
+
+        // Pass 1: Insert the item
+        const { data, error } = await supabase
+            .from('inventory')
+            .insert([{
+                item_name: name,
+                price: price,
+                stock_quantity: qty,
+                oem_ref_id: pickedOemId || null // Temporarily null if none picked
+            }])
+            .select(); // Get the created row back to see the new ID
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        const newItem = data[0];
+
+        // Pass 2: If no alternative was picked, set oem_ref_id to its own new ID
+        if (!pickedOemId) {
+            await supabase
+                .from('inventory')
+                .update({ oem_ref_id: newItem.id })
+                .eq('id', newItem.id);
+        }
+
+        // Clear inputs and refresh
+        document.getElementById('inv-name').value = '';
+        document.getElementById('inv-price').value = '';
+        document.getElementById('inv-qty').value = '';
+        document.getElementById('inv-alt-search').value = '';
+        document.getElementById('inv-oem-id').value = '';
+        loadData('inventory');
+        
     } else {
-        originalAddItem(table);
+        // ... logic for mechanics/services remains the same ...
+    }
+};window.addItem = async (table) => {
+    if (table === 'inventory') {
+        const name = document.getElementById('inv-name').value;
+        const price = document.getElementById('inv-price').value;
+        const qty = document.getElementById('inv-qty').value;
+        const pickedOemId = document.getElementById('inv-oem-id').value;
+
+        // Pass 1: Insert the item
+        const { data, error } = await supabase
+            .from('inventory')
+            .insert([{
+                item_name: name,
+                price: price,
+                stock_quantity: qty,
+                oem_ref_id: pickedOemId || null // Temporarily null if none picked
+            }])
+            .select(); // Get the created row back to see the new ID
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        const newItem = data[0];
+
+        // Pass 2: If no alternative was picked, set oem_ref_id to its own new ID
+        if (!pickedOemId) {
+            await supabase
+                .from('inventory')
+                .update({ oem_ref_id: newItem.id })
+                .eq('id', newItem.id);
+        }
+
+        // Clear inputs and refresh
+        document.getElementById('inv-name').value = '';
+        document.getElementById('inv-price').value = '';
+        document.getElementById('inv-qty').value = '';
+        document.getElementById('inv-alt-search').value = '';
+        document.getElementById('inv-oem-id').value = '';
+        loadData('inventory');
+        
+    } else {
+        // ... logic for mechanics/services remains the same ...
     }
 };
     window.deleteItem = async (table, id) => {
