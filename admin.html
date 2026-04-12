@@ -216,10 +216,11 @@
     const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlycXRuYXhuc2hra2l6cmFkdHNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3ODY5NTMsImV4cCI6MjA5MTM2Mjk1M30.dBveYrCJ24XIkyx6rc-iVaYkdOBGgsa-wuCV2shr1cY'
     const supabase = createClient(supabaseUrl, supabaseKey)
 
-    // Data Storage for Filtering
+    // Data Storage
     let allMechanics = [];
     let allServices = [];
     let allInventory = [];
+    let allReceipts = [];
 
     // Security & Init
     const user = JSON.parse(localStorage.getItem('currentUser'));
@@ -228,7 +229,7 @@
         window.location.href = 'dashboard.html';
     } else {
         document.getElementById('display-user-name').innerText = user.first_name + " " + user.last_name + " (Admin)";
-        loadData('mechanics');
+        loadData('mechanics'); // Default tab
     }
 
     window.logout = () => {
@@ -236,137 +237,66 @@
         window.location.href = 'login.html';
     };
 
-let allReceipts = []; // Add this to your top-level variables
-
-// This ensures that clicking the 'Receipts' tab fetches from the 'transactions' table
-window.showTab = (tabName) => {
-    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.admin-nav button').forEach(b => b.classList.remove('active-tab'));
-    document.getElementById('tab-' + tabName).classList.add('active');
-    
-    const btnId = 'btn-' + (tabName === 'mechanics' ? 'mech' : tabName === 'services' ? 'srv' : tabName === 'inventory' ? 'inv' : 'receipts');
-    const targetBtn = document.getElementById(btnId);
-    if (targetBtn) targetBtn.classList.add('active-tab');
-    
-    // CRITICAL FIX: Redirect 'receipts' to the actual 'transactions' table
-    if (tabName === 'receipts') {
-        loadData('transactions');
-    } else {
-        loadData(tabName);
-    }
-}
-
-async function loadData(table) {
-    const { data, error } = await supabase.from(table).select('*').order('created_at', { ascending: false });
-    if (error) return console.error(error);
-
-    if (table === 'mechanics') { allMechanics = data; renderMechanicsTable(data); }
-    else if (table === 'services') { allServices = data; renderServicesTable(data); }
-    else if (table === 'inventory') { allInventory = data; renderInventoryTable(data); }
-    else if (table === 'transactions') { allReceipts = data; renderReceiptsTable(data); } // Handle receipts
-}
-
-// Map 'receipts' tab name to the 'transactions' table in DB
-const originalLoadData = loadData;
-window.loadData = (table) => {
-    if (table === 'receipts') loadData('transactions');
-    else originalLoadData(table);
-}
-function renderReceiptsTable(data) {
-    const tbody = document.querySelector(`#table-receipts tbody`);
-    if (!tbody) return; // Safety check
-    
-    tbody.innerHTML = data.map(r => {
-        const date = new Date(r.created_at).toLocaleDateString();
-        // Check if items_json exists and is an array before mapping
-        const items = Array.isArray(r.items_json) ? r.items_json : [];
-        const itemPreview = items.map(i => i.item_name).join(', ');
+    window.showTab = (tabName) => {
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.admin-nav button').forEach(b => b.classList.remove('active-tab'));
+        document.getElementById('tab-' + tabName).classList.add('active');
         
-        return `
-            <tr>
-                <td>${date}</td>
-                <td><strong>${r.customer_name}</strong><br><small>${r.plate_number}</small></td>
-                <td>₱${parseFloat(r.total_amount || 0).toFixed(2)}</td>
-                <td style="font-size: 0.85em; color: #666;">${itemPreview}</td>
-                <td>
-                    <button class="btn-del" onclick="handleRefund('${r.id}')">Void / Refund</button>
-                </td>
-            </tr>
-        `;
-    }).join('');
-}
-
-window.filterReceipts = () => {
-    const query = document.getElementById('receipt-search').value.toLowerCase();
-    const filtered = allReceipts.filter(r => 
-        r.customer_name.toLowerCase().includes(query) || 
-        r.plate_number.toLowerCase().includes(query)
-    );
-    renderReceiptsTable(filtered);
-}
-
-window.handleRefund = async (id) => {
-    const transaction = allReceipts.find(r => r.id === id);
-    if (!transaction) return;
-
-    if (confirm(`Void transaction for ${transaction.customer_name}?`)) {
-        const isReturned = confirm("Are the items being returned to physical inventory? \n\n(OK = Yes, add qty back. Cancel = No, unusable/broken.)");
-
-        if (isReturned) {
-            // Loop through items in the JSON and update inventory
-            for (const item of transaction.items_json) {
-                if (item.item_type === 'Part') {
-                    // Fetch current qty
-                    const { data: invItem } = await supabase
-                        .from('inventory')
-                        .select('stock_quantity')
-                        .eq('item_name', item.item_name)
-                        .single();
-
-                    if (invItem) {
-                        const newQty = (invItem.stock_quantity || 0) + 1;
-                        await supabase
-                            .from('inventory')
-                            .update({ stock_quantity: newQty })
-                            .eq('item_name', item.item_name);
-                    }
-                }
-            }
-            alert("Inventory restocked and transaction voided.");
+        const btnId = 'btn-' + (tabName === 'mechanics' ? 'mech' : tabName === 'services' ? 'srv' : tabName === 'inventory' ? 'inv' : 'receipts');
+        const targetBtn = document.getElementById(btnId);
+        if (targetBtn) targetBtn.classList.add('active-tab');
+        
+        if (tabName === 'receipts') {
+            loadData('transactions');
         } else {
-            alert("Transaction voided. Inventory remains unchanged.");
-        }
-
-        // Delete the transaction record
-        const { error } = await supabase.from('transactions').delete().eq('id', id);
-        if (error) alert(error.message);
-        loadData('transactions');
-    }
-};
-    // --- NEW: OEM SEARCH LOGIC ---
-
-// Updates the datalist options and syncs the OEM ID
-window.syncOEMRef = (inputElement, type, rowId = null) => {
-    const val = inputElement.value;
-    // Find the item in our local array that matches the typed name
-    const match = allInventory.find(item => item.item_name === val);
-    
-    if (match) {
-        if (type === 'add') {
-            document.getElementById('inv-oem-id').value = match.oem_ref_id || match.id;
-        } else {
-            document.getElementById(`edit-inv-oem-${rowId}`).value = match.oem_ref_id || match.id;
+            loadData(tabName);
         }
     }
-};
 
-// Populate the datalist for the dropdown effect
-function updateInventoryDatalist() {
-    const dl = document.getElementById('alt-items');
-    dl.innerHTML = allInventory.map(i => `<option value="${i.item_name}">`).join('');
-}
+    async function loadData(table) {
+        const { data, error } = await supabase.from(table).select('*').order('created_at', { ascending: false });
+        if (error) return console.error(error);
+
+        if (table === 'mechanics') { allMechanics = data; renderMechanicsTable(data); }
+        else if (table === 'services') { allServices = data; renderServicesTable(data); }
+        else if (table === 'inventory') { allInventory = data; renderInventoryTable(data); }
+        else if (table === 'transactions') { allReceipts = data; renderReceiptsTable(data); }
+    }
 
     // --- RENDER FUNCTIONS ---
+
+    function renderReceiptsTable(data) {
+        const tbody = document.querySelector(`#table-receipts tbody`);
+        if (!tbody) return;
+        
+        tbody.innerHTML = data.map(r => {
+            const date = new Date(r.created_at).toLocaleDateString();
+            const rawItems = Array.isArray(r.items_json) ? r.items_json : [];
+            
+            // GROUPING LOGIC FOR RECEIPT HISTORY
+            const grouped = rawItems.reduce((acc, item) => {
+                acc[item.item_name] = (acc[item.item_name] || 0) + 1;
+                return acc;
+            }, {});
+
+            const itemPreview = Object.entries(grouped)
+                .map(([name, qty]) => `${name}${qty > 1 ? ' x' + qty : ''}`)
+                .join(', ');
+            
+            return `
+                <tr>
+                    <td>${date}</td>
+                    <td><strong>${r.customer_name}</strong><br><small>${r.plate_number}</small></td>
+                    <td>₱${parseFloat(r.total_amount || 0).toFixed(2)}</td>
+                    <td style="font-size: 0.85em; color: #666; max-width: 300px;">${itemPreview}</td>
+                    <td>
+                        <button class="btn-del" onclick="handleRefund('${r.id}')">Void / Refund</button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
     function renderMechanicsTable(data) {
         const tbody = document.querySelector(`#table-mechanics tbody`);
         tbody.innerHTML = data.map(m => `
@@ -389,227 +319,127 @@ function updateInventoryDatalist() {
         `).join('');
     }
 
-function renderServicesTable(data) {
-    const tbody = document.querySelector(`#table-services tbody`);
-    tbody.innerHTML = data.map(s => `
-        <tr>
-            <td><input type="text" class="edit-input" id="edit-srv-name-${s.id}" value="${s.service_name}"></td>
-            <td><input type="number" class="edit-input" id="edit-srv-price-${s.id}" value="${s.price}"></td>
-            <td>
-                <button class="btn-save" onclick="saveService(${s.id})">Update</button>
-                <button class="btn-del" onclick="deleteItem('services', ${s.id})">Del</button>
-            </td>
-        </tr>
-    `).join('');
-}
-
-// --- SAVE FUNCTIONS ---
-
-window.saveService = async (id) => {
-    const name = document.getElementById(`edit-srv-name-${id}`).value;
-    const price = document.getElementById(`edit-srv-price-${id}`).value;
-
-    const { error } = await supabase
-        .from('services')
-        .update({ service_name: name, price: price })
-        .eq('id', id);
-
-    if (error) alert("Error updating service: " + error.message);
-    else {
-        alert("Service updated!");
-        loadData('services');
-    }
-};
-
-// --- UPDATED SAVE FUNCTION ---
-window.saveInventory = async (id) => {
-    const name = document.getElementById(`edit-inv-name-${id}`).value;
-    const price = document.getElementById(`edit-inv-price-${id}`).value;
-    const qty = document.getElementById(`edit-inv-qty-${id}`).value;
-    let oem = document.getElementById(`edit-inv-oem-${id}`).value;
-
-    // If the user cleared the OEM field, default it back to its own ID
-    if (!oem || oem.trim() === "") {
-        oem = id;
+    function renderServicesTable(data) {
+        const tbody = document.querySelector(`#table-services tbody`);
+        tbody.innerHTML = data.map(s => `
+            <tr>
+                <td><input type="text" class="edit-input" id="edit-srv-name-${s.id}" value="${s.service_name}"></td>
+                <td><input type="number" class="edit-input" id="edit-srv-price-${s.id}" value="${s.price}"></td>
+                <td>
+                    <button class="btn-save" onclick="saveService(${s.id})">Update</button>
+                    <button class="btn-del" onclick="deleteItem('services', ${s.id})">Del</button>
+                </td>
+            </tr>
+        `).join('');
     }
 
-    const { error } = await supabase
-        .from('inventory')
-        .update({ 
-            item_name: name, 
-            price: price, 
-            stock_quantity: qty,
-            oem_ref_id: oem 
-        })
-        .eq('id', id);
+    function renderInventoryTable(data) {
+        const dl = document.getElementById('alt-items');
+        if(dl) dl.innerHTML = data.map(i => `<option value="${i.item_name}">`).join('');
 
-    if (error) alert(error.message);
-    else {
-        alert("Inventory updated!");
-        loadData('inventory');
-    }
-};
-
-function renderInventoryTable(data) {
-    updateInventoryDatalist(); // Ensure dropdown is fresh
-    const tbody = document.querySelector(`#table-inventory tbody`);
-    tbody.innerHTML = data.map(i => `
-        <tr>
-            <td><input type="text" class="edit-input" id="edit-inv-name-${i.id}" value="${i.item_name}"></td>
-            <td><input type="number" class="edit-input" id="edit-inv-price-${i.id}" value="${i.price}"></td>
-            <td><input type="number" class="edit-input" id="edit-inv-qty-${i.id}" value="${i.stock_quantity || 0}"></td>
-            <td><input type="text" class="edit-input" id="edit-inv-oem-${i.id}" value="${i.oem_ref_id || ''}" readonly style="background:#f0f0f0"></td>
-            <td>
-                <input list="alt-items" class="edit-input" placeholder="Find Alt..." 
-                    oninput="syncOEMRef(this, 'edit', ${i.id})">
-            </td>
-            <td>
-                <button class="btn-save" onclick="saveInventory(${i.id})">Update</button>
-                <button class="btn-del" onclick="deleteItem('inventory', ${i.id})">Del</button>
-            </td>
-        </tr>
-    `).join('');
-}
-
-
-    // --- FILTER FUNCTIONS ---
-    window.filterMechanics = () => {
-        const query = document.getElementById('mech-search').value.toLowerCase();
-        const filtered = allMechanics.filter(m => 
-            m.first_name.toLowerCase().includes(query) || 
-            m.last_name.toLowerCase().includes(query)
-        );
-        renderMechanicsTable(filtered);
-    }
-
-    window.filterServices = () => {
-        const query = document.getElementById('srv-search').value.toLowerCase();
-        const filtered = allServices.filter(s => 
-            s.service_name.toLowerCase().includes(query)
-        );
-        renderServicesTable(filtered);
-    }
-
-    window.filterInventory = () => {
-        const query = document.getElementById('inv-search').value.toLowerCase();
-        const filtered = allInventory.filter(i => 
-            i.item_name.toLowerCase().includes(query)
-        );
-        renderInventoryTable(filtered);
+        const tbody = document.querySelector(`#table-inventory tbody`);
+        tbody.innerHTML = data.map(i => `
+            <tr>
+                <td><input type="text" class="edit-input" id="edit-inv-name-${i.id}" value="${i.item_name}"></td>
+                <td><input type="number" class="edit-input" id="edit-inv-price-${i.id}" value="${i.price}"></td>
+                <td><input type="number" class="edit-input" id="edit-inv-qty-${i.id}" value="${i.stock_quantity || 0}"></td>
+                <td><input type="text" class="edit-input" id="edit-inv-oem-${i.id}" value="${i.oem_ref_id || ''}" readonly style="background:#f0f0f0"></td>
+                <td>
+                    <input list="alt-items" class="edit-input" placeholder="Find Alt..." oninput="syncOEMRef(this, 'edit', ${i.id})">
+                </td>
+                <td>
+                    <button class="btn-save" onclick="saveInventory(${i.id})">Update</button>
+                    <button class="btn-del" onclick="deleteItem('inventory', ${i.id})">Del</button>
+                </td>
+            </tr>
+        `).join('');
     }
 
     // --- ACTION FUNCTIONS ---
-const originalAddItem = window.addItem;
-window.addItem = async (table) => {
-    if (table === 'inventory') {
-        const name = document.getElementById('inv-name').value;
-        const price = document.getElementById('inv-price').value;
-        const qty = document.getElementById('inv-qty').value;
-        const pickedOemId = document.getElementById('inv-oem-id').value;
 
-        // Pass 1: Insert the item
-        const { data, error } = await supabase
-            .from('inventory')
-            .insert([{
-                item_name: name,
-                price: price,
-                stock_quantity: qty,
-                oem_ref_id: pickedOemId || null // Temporarily null if none picked
-            }])
-            .select(); // Get the created row back to see the new ID
+    window.addItem = async (table) => {
+        if (table === 'inventory') {
+            const name = document.getElementById('inv-name').value;
+            const price = document.getElementById('inv-price').value;
+            const qty = document.getElementById('inv-qty').value;
+            const pickedOemId = document.getElementById('inv-oem-id').value;
 
-        if (error) {
-            alert(error.message);
-            return;
+            const { data, error } = await supabase.from('inventory').insert([{
+                item_name: name, price: price, stock_quantity: qty, oem_ref_id: pickedOemId || null
+            }]).select();
+
+            if (error) return alert(error.message);
+            if (!pickedOemId) {
+                await supabase.from('inventory').update({ oem_ref_id: data[0].id }).eq('id', data[0].id);
+            }
+        } else if (table === 'services') {
+            const name = document.getElementById('srv-name').value;
+            const price = document.getElementById('srv-price').value;
+            const { error } = await supabase.from('services').insert([{ service_name: name, price: price }]);
+            if (error) return alert(error.message);
+        } else if (table === 'mechanics') {
+            const first = document.getElementById('mech-first').value;
+            const last = document.getElementById('mech-last').value;
+            const contact = document.getElementById('mech-contact').value;
+            const { error } = await supabase.from('mechanics').insert([{ first_name: first, last_name: last, contact: contact }]);
+            if (error) return alert(error.message);
         }
+        loadData(table);
+    };
 
-        const newItem = data[0];
-
-        // Pass 2: If no alternative was picked, set oem_ref_id to its own new ID
-        if (!pickedOemId) {
-            await supabase
-                .from('inventory')
-                .update({ oem_ref_id: newItem.id })
-                .eq('id', newItem.id);
-        }
-
-        // Clear inputs and refresh
-        document.getElementById('inv-name').value = '';
-        document.getElementById('inv-price').value = '';
-        document.getElementById('inv-qty').value = '';
-        document.getElementById('inv-alt-search').value = '';
-        document.getElementById('inv-oem-id').value = '';
-        loadData('inventory');
-        
-    } else {
-        // ... logic for mechanics/services remains the same ...
-    }
-};window.addItem = async (table) => {
-    if (table === 'inventory') {
-        const name = document.getElementById('inv-name').value;
-        const price = document.getElementById('inv-price').value;
-        const qty = document.getElementById('inv-qty').value;
-        const pickedOemId = document.getElementById('inv-oem-id').value;
-
-        // Pass 1: Insert the item
-        const { data, error } = await supabase
-            .from('inventory')
-            .insert([{
-                item_name: name,
-                price: price,
-                stock_quantity: qty,
-                oem_ref_id: pickedOemId || null // Temporarily null if none picked
-            }])
-            .select(); // Get the created row back to see the new ID
-
-        if (error) {
-            alert(error.message);
-            return;
-        }
-
-        const newItem = data[0];
-
-        // Pass 2: If no alternative was picked, set oem_ref_id to its own new ID
-        if (!pickedOemId) {
-            await supabase
-                .from('inventory')
-                .update({ oem_ref_id: newItem.id })
-                .eq('id', newItem.id);
-        }
-
-        // Clear inputs and refresh
-        document.getElementById('inv-name').value = '';
-        document.getElementById('inv-price').value = '';
-        document.getElementById('inv-qty').value = '';
-        document.getElementById('inv-alt-search').value = '';
-        document.getElementById('inv-oem-id').value = '';
-        loadData('inventory');
-        
-    } else {
-        // ... logic for mechanics/services remains the same ...
-    }
-};
     window.deleteItem = async (table, id) => {
         if(confirm("Are you sure?")) {
             const { error } = await supabase.from(table).delete().eq('id', id);
             if (error) alert(error.message);
             loadData(table);
         }
-    }
+    };
+
+    window.syncOEMRef = (inputElement, type, rowId = null) => {
+        const val = inputElement.value;
+        const match = allInventory.find(item => item.item_name === val);
+        if (match) {
+            const targetId = type === 'add' ? 'inv-oem-id' : `edit-inv-oem-${rowId}`;
+            document.getElementById(targetId).value = match.oem_ref_id || match.id;
+        }
+    };
+
+    window.saveService = async (id) => {
+        const name = document.getElementById(`edit-srv-name-${id}`).value;
+        const price = document.getElementById(`edit-srv-price-${id}`).value;
+        await supabase.from('services').update({ service_name: name, price: price }).eq('id', id);
+        loadData('services');
+    };
+
+    window.saveInventory = async (id) => {
+        const name = document.getElementById(`edit-inv-name-${id}`).value;
+        const price = document.getElementById(`edit-inv-price-${id}`).value;
+        const qty = document.getElementById(`edit-inv-qty-${id}`).value;
+        await supabase.from('inventory').update({ item_name: name, price: price, stock_quantity: qty }).eq('id', id);
+        loadData('inventory');
+    };
 
     window.saveMechanic = async (id) => {
         const first = document.getElementById(`edit-first-${id}`).value;
         const last = document.getElementById(`edit-last-${id}`).value;
         const contact = document.getElementById(`edit-contact-${id}`).value;
         const status = document.getElementById(`edit-status-${id}`).value;
+        await supabase.from('mechanics').update({ first_name: first, last_name: last, contact: contact, status: status }).eq('id', id);
+        loadData('mechanics');
+    };
 
-        const { error } = await supabase
-            .from('mechanics')
-            .update({ first_name: first, last_name: last, contact: contact, status: status })
-            .eq('id', id);
-
-        if (error) alert(error.message);
-        else loadData('mechanics');
+    // Filter Logic
+    window.filterServices = () => {
+        const query = document.getElementById('srv-search').value.toLowerCase();
+        renderServicesTable(allServices.filter(s => s.service_name.toLowerCase().includes(query)));
+    };
+    window.filterInventory = () => {
+        const query = document.getElementById('inv-search').value.toLowerCase();
+        renderInventoryTable(allInventory.filter(i => i.item_name.toLowerCase().includes(query)));
+    };
+    window.filterReceipts = () => {
+        const query = document.getElementById('receipt-search').value.toLowerCase();
+        renderReceiptsTable(allReceipts.filter(r => r.customer_name.toLowerCase().includes(query) || r.plate_number.toLowerCase().includes(query)));
     };
 </script>
 </html>
