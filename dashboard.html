@@ -2,60 +2,44 @@
 <html>
 <head>
     <title>Elena's Shop - Dashboard</title>
-<link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css">
     <style>
-        .mech-tag {
-    padding: 8px 15px;
-    border-radius: 6px;
-    background: white;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 0.9em;
-    border-left: 5px solid #ccc;
-}
-.mech-tag.available { border-left-color: var(--primary); }
-.mech-tag.busy { border-left-color: var(--danger); opacity: 0.8; }
+        /* Existing styles... */
+        .mech-tag { padding: 8px 15px; border-radius: 6px; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: flex; align-items: center; gap: 10px; font-size: 0.9em; border-left: 5px solid #ccc; }
+        .mech-tag.available { border-left-color: var(--primary); }
+        .mech-tag.busy { border-left-color: var(--danger); opacity: 0.8; }
+        .status-dot { height: 8px; width: 8px; border-radius: 50%; display: inline-block; }
+        .available .status-dot { background-color: var(--primary); }
+        .busy .status-dot { background-color: var(--danger); }
+        .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; padding: 20px; max-width: 1200px; margin: 0 auto; }
+        .bay-card { background: white; border-radius: 10px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center; cursor: pointer; border-top: 8px solid #ccc; }
+        .bay-card.occupied { border-top-color: var(--danger); }
+        .bay-card.available { border-top-color: var(--primary); }
+        .sticker { display: inline-block; padding: 5px 15px; border-radius: 20px; font-weight: bold; font-size: 0.8em; margin-bottom: 10px; }
+        .available .sticker { background: #e6fff4; color: var(--primary); }
+        .occupied .sticker { background: #fff0f0; color: var(--danger); }
+        #modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 100; }
+        .modal-content { background: white; padding: 30px; border-radius: 8px; width: 400px; }
 
-.status-dot {
-    height: 8px;
-    width: 8px;
-    border-radius: 50%;
-    display: inline-block;
-}
-.available .status-dot { background-color: var(--primary); }
-.busy .status-dot { background-color: var(--danger); }
-    /* DASHBOARD CONTENT */
-    /* Remove the .container wrapper around the grid so it can breathe */
-    .dashboard-grid { 
-        display: grid; 
-        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); 
-        gap: 20px; 
-        padding: 20px; 
-        max-width: 1200px; 
-        margin: 0 auto; 
-    }
-    .bay-card { 
-        background: white; 
-        border-radius: 10px; 
-        padding: 20px; 
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
-        text-align: center; 
-        cursor: pointer; 
-        border-top: 8px solid #ccc; 
-    }
-    .bay-card.occupied { border-top-color: var(--danger); }
-    .bay-card.available { border-top-color: var(--primary); }
-    
-    .sticker { display: inline-block; padding: 5px 15px; border-radius: 20px; font-weight: bold; font-size: 0.8em; margin-bottom: 10px; }
-    .available .sticker { background: #e6fff4; color: var(--primary); }
-    .occupied .sticker { background: #fff0f0; color: var(--danger); }
-
-    /* Modal */
-    #modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 100; }
-    .modal-content { background: white; padding: 30px; border-radius: 8px; width: 400px; }
-</style>
+        /* NEW STYLES FOR LOCKING & CANCEL */
+        .nav-locked button:not(.active) {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+        .btn-cancel-pending {
+            background: #ff4d4d;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 25px;
+            height: 25px;
+            cursor: pointer;
+            font-weight: bold;
+            margin-left: 15px;
+            line-height: 1;
+        }
+    </style>
 </head>
 <body>
     <header>
@@ -77,86 +61,83 @@
     </nav>
 
     <div id="pending-alert" style="display:none; background: #fff3cd; padding: 15px; text-align: center; font-weight: bold; border-bottom: 1px solid #ffeeba;">
-        ⚠️ Assignment Pending for: <span id="pending-info"></span>. Click an Available Bay to Assign.
+        <span style="display: flex; align-items: center; justify-content: center;">
+            ⚠️ Assignment Pending for: <span id="pending-info" style="margin-left:5px;"></span>. Click an Available Bay to Assign.
+            <button class="btn-cancel-pending" onclick="cancelPendingTransaction()" title="Cancel & Delete Pending Items">X</button>
+        </span>
     </div>
 
-<div id="mechanic-section" style="max-width: 1200px; margin: 20px auto; padding: 0 20px;">
-    <h3 style="margin-bottom: 10px; color: var(--dark);">👨‍🔧 Mechanic Status</h3>
-    <div id="mechanic-list" style="display: flex; gap: 15px; flex-wrap: wrap;">
+    <div id="mechanic-section" style="max-width: 1200px; margin: 20px auto; padding: 0 20px;">
+        <h3 style="margin-bottom: 10px; color: var(--dark);">👨‍🔧 Mechanic Status</h3>
+        <div id="mechanic-list" style="display: flex; gap: 15px; flex-wrap: wrap;"></div>
+    </div>
+
+    <div class="dashboard-grid" id="bay-grid"></div>
+
+    <div id="modal">
+        <div class="modal-content">
+            <h3>Assign Job to <span id="target-bay"></span></h3>
+            <label>Select Mechanic:</label>
+            <select id="mech-select" style="width:100%; padding:10px; margin:10px 0; border-radius:4px;"></select>
+            <button class="btn-assign" onclick="confirmAssignment()" style="width:100%; padding:12px; background:var(--primary); color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Confirm Assignment</button>
+            <button onclick="closeModal()" style="width:100%; margin-top:10px; background:none; border:none; color:gray; cursor:pointer;">Cancel</button>
         </div>
-</div>
-
-<div class="dashboard-grid" id="bay-grid"></div>
-
-<div id="modal">
-    <div class="modal-content">
-        <h3>Assign Job to <span id="target-bay"></span></h3>
-        <label>Select Mechanic:</label>
-        <select id="mech-select" style="width:100%; padding:10px; margin:10px 0; border-radius:4px;"></select>
-        <button class="btn-assign" onclick="confirmAssignment()" style="width:100%; padding:12px; background:var(--primary); color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Confirm Assignment</button>
-        <button onclick="closeModal()" style="width:100%; margin-top:10px; background:none; border:none; color:gray; cursor:pointer;">Cancel</button>
     </div>
-</div>
-</body>
 
-</body>
 <script type="module">
-    // 1. IDENTITY CHECK
-    const user = JSON.parse(localStorage.getItem('currentUser'));
-    if (!user) {
-        window.location.href = 'login.html';
-    } else {
-        document.getElementById('display-user-name').innerText = user.first_name + " " + user.last_name;
-        if (user.manager_id === null) {
-            document.getElementById('admin-nav').style.display = 'block';
-        }
-    }
-
-    // 2. LOGOUT FUNCTION
-    window.logout = () => {
-        localStorage.removeItem('currentUser');
-        window.location.href = 'login.html';
-    };
-
     import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
     const supabaseUrl = 'https://yrqtnaxnshkkizradtsd.supabase.co'
     const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlycXRuYXhuc2hra2l6cmFkdHNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3ODY5NTMsImV4cCI6MjA5MTM2Mjk1M30.dBveYrCJ24XIkyx6rc-iVaYkdOBGgsa-wuCV2shr1cY'
     const supabase = createClient(supabaseUrl, supabaseKey)
+
+    const user = JSON.parse(localStorage.getItem('currentUser'));
+    if (!user) { window.location.href = 'login.html'; }
+    else {
+        document.getElementById('display-user-name').innerText = user.first_name + " " + user.last_name;
+        if (user.manager_id === null) document.getElementById('admin-nav').style.display = 'block';
+    }
 
     const urlParams = new URLSearchParams(window.location.search);
     const plate = urlParams.get('plate');
     const name = urlParams.get('name');
     let selectedBayId = null;
 
+    // 1. LOCK NAVIGATION & SHOW ALERT
     if (plate) {
         document.getElementById('pending-alert').style.display = 'block';
         document.getElementById('pending-info').innerText = `${name} (${plate})`;
+        document.getElementById('navbar').classList.add('nav-locked');
     }
+
+    // 2. CANCEL TRANSACTION FUNCTION
+    window.cancelPendingTransaction = async () => {
+        if(confirm("Discard this booking? This will delete the pending service items.")){
+            const { error } = await supabase
+                .from('transaction_details')
+                .delete()
+                .eq('plate_number', plate);
+            
+            if(!error) window.location.href = 'dashboard.html';
+            else alert("Error cancelling: " + error.message);
+        }
+    };
 
     async function loadDashboard() {
         const { data: bays } = await supabase.from('bays').select('*').order('id');
-        // FIX: Order by first_name since 'name' column is gone
         const { data: mechs } = await supabase.from('mechanics').select('*').order('first_name');
         
-        // Render Mechanics Tags
         const mechList = document.getElementById('mechanic-list');
-        mechList.innerHTML = mechs.map(m => {
-            // FIX: Combine first and last name
-            const fullName = `${m.first_name} ${m.last_name}`;
-            return `
-                <div class="mech-tag ${m.status.toLowerCase().replace(' ', '-')}">
-                    <span class="status-dot"></span>
-                    <strong>${fullName}</strong> 
-                    <small style="color:#666">(${m.status})</small>
-                </div>
-            `;
-        }).join('');
+        mechList.innerHTML = mechs.map(m => `
+            <div class="mech-tag ${m.status.toLowerCase().replace(' ', '-')}">
+                <span class="status-dot"></span>
+                <strong>${m.first_name} ${m.last_name}</strong> 
+                <small style="color:#666">(${m.status})</small>
+            </div>
+        `).join('');
 
-        // Render Bays Cards
         const grid = document.getElementById('bay-grid');
         grid.innerHTML = bays.map(bay => {
             const assignedMech = mechs.find(m => m.id == bay.current_mechanic_id);
-            // FIX: Use combined name here too
             const mechName = assignedMech ? `${assignedMech.first_name} ${assignedMech.last_name}` : "Unassigned";
 
             return `
@@ -180,74 +161,43 @@
         if (status === 'Available' && plate) {
             selectedBayId = id;
             document.getElementById('target-bay').innerText = bayName;
-            // Only show mechanics who are 'Available'
             const { data: mechs } = await supabase.from('mechanics').select('*').eq('status', 'Available');
-            
-            if (mechs.length === 0) {
-                document.getElementById('mech-select').innerHTML = '<option value="">No Mechanics Available</option>';
-            } else {
-                document.getElementById('mech-select').innerHTML = mechs.map(m => 
-                    `<option value="${m.id}">${m.first_name} ${m.last_name}</option>`
-                ).join('');
-            }
+            document.getElementById('mech-select').innerHTML = mechs.length 
+                ? mechs.map(m => `<option value="${m.id}">${m.first_name} ${m.last_name}</option>`).join('')
+                : '<option value="">No Available Mechanics</option>';
             document.getElementById('modal').style.display = 'flex';
         }
     };
 
     window.confirmAssignment = async () => {
         const mechId = document.getElementById('mech-select').value;
-        if(!mechId) { alert("Please select a mechanic"); return; }
+        if(!mechId) return alert("Please select a mechanic");
 
-        // 1. Update Bay
         const { error: bayError } = await supabase.from('bays').update({ 
-            status: 'Occupied', 
-            current_plate: plate, 
-            current_customer: name,
-            current_mechanic_id: mechId 
+            status: 'Occupied', current_plate: plate, current_customer: name, current_mechanic_id: mechId 
         }).eq('id', selectedBayId);
 
-        if (bayError) {
-            console.error("Bay Update Error:", bayError);
-            alert("Error updating bay. Check console.");
-            return;
+        if (!bayError) {
+            await supabase.from('mechanics').update({ status: 'Busy' }).eq('id', mechId);
+            window.location.href = 'dashboard.html';
         }
-
-        // 2. Update Mechanic Status to 'Busy'
-        const { error: mechError } = await supabase.from('mechanics').update({ 
-            status: 'Busy' 
-        }).eq('id', mechId);
-
-        window.location.href = 'dashboard.html';
     };
 
     window.releaseBay = async (id) => {
         if(!confirm("Are you sure this job is finished?")) return;
-
-        const { data: bay } = await supabase
-            .from('bays')
-            .select('current_plate, current_customer, current_mechanic_id')
-            .eq('id', id)
-            .single();
-
+        const { data: bay } = await supabase.from('bays').select('*').eq('id', id).single();
         if (!bay) return;
 
-        // Reset Bay
-        await supabase.from('bays').update({ 
-            status: 'Available', 
-            current_plate: null, 
-            current_customer: null,
-            current_mechanic_id: null 
-        }).eq('id', id);
-
-        // Set Mechanic back to Available
-        if (bay.current_mechanic_id) {
-            await supabase.from('mechanics').update({ status: 'Available' }).eq('id', bay.current_mechanic_id);
-        }
-
+        await supabase.from('bays').update({ status: 'Available', current_plate: null, current_customer: null, current_mechanic_id: null }).eq('id', id);
+        if (bay.current_mechanic_id) await supabase.from('mechanics').update({ status: 'Available' }).eq('id', bay.current_mechanic_id);
+        
         window.location.href = `checkout.html?plate=${bay.current_plate}&name=${encodeURIComponent(bay.current_customer)}`;
     };
 
     window.closeModal = () => document.getElementById('modal').style.display = 'none';
+    window.logout = () => { localStorage.removeItem('currentUser'); window.location.href = 'login.html'; };
+
     loadDashboard();
 </script>
+</body>
 </html>
