@@ -21,25 +21,17 @@
         #modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 100; }
         .modal-content { background: white; padding: 30px; border-radius: 8px; width: 400px; }
 
-        /* NEW STYLES FOR LOCKING & CANCEL */
-        .nav-locked button:not(.active) {
-            opacity: 0.5;
-            cursor: not-allowed;
-            pointer-events: none;
-        }
-        /* Disable the Dashboard button specifically when assignment is pending */
-.nav-locked button.active {
-    opacity: 0.5;
-    cursor: not-allowed;
-    pointer-events: none;
-}
-        /* Disable Finish Job buttons when an assignment is pending */
+/* Global lock for specific elements when nav-locked is on the body */
+.nav-locked #navbar button:not(.active),
+.nav-locked #navbar button.active,
+.nav-locked .user-area button,
 .nav-locked .btn-finish {
     opacity: 0.5;
     cursor: not-allowed;
     pointer-events: none;
 }
-        .btn-cancel-pending {
+
+.btn-cancel-pending {
             background: #ff4d4d;
             color: white;
             border: none;
@@ -118,7 +110,8 @@
 if (plate) {
     document.getElementById('pending-alert').style.display = 'block';
     document.getElementById('pending-info').innerText = `${name} (${plate})`;
-    document.getElementById('navbar').classList.add('nav-locked'); // This triggers the CSS
+    // Add the class to the body so we can control header, nav, and cards easily
+    document.body.classList.add('nav-locked'); 
 }
 
     // 2. CANCEL TRANSACTION FUNCTION
@@ -266,8 +259,15 @@ window.releaseBay = async (id) => {
 };
 
     window.closeModal = () => document.getElementById('modal').style.display = 'none';
-    window.logout = () => { localStorage.removeItem('currentUser'); window.location.href = 'login.html'; };
-
+window.logout = () => { 
+    // Prevent logout if a transaction is in progress
+    if (plate) {
+        alert("Please finish or cancel the current assignment before logging out.");
+        return;
+    }
+    localStorage.removeItem('currentUser'); 
+    window.location.href = 'login.html'; 
+};
     loadDashboard();
 </script>
 </body>
