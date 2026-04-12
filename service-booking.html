@@ -155,10 +155,9 @@
         document.getElementById('customer-info').innerText = `Booking for: ${name} (${plate})`;
     }
 
-    // --- LOGIC VARIABLES ---
     let serviceData = []; 
     let inventoryData = [];
-    let selectedItems = []; // Declared only once
+    let selectedItems = []; 
 
     async function loadOptions() {
         const { data: srv } = await supabase.from('services').select('*');
@@ -166,7 +165,6 @@
         
         if (srv) serviceData = srv;
         if (inv) {
-            // FIX: Use stock_quantity from your Supabase screenshot
             inventoryData = inv.map(item => ({ ...item, current_qty: item.stock_quantity }));
         }
         renderDatalists();
@@ -182,39 +180,72 @@
             .map(i => `<option value="${i.item_name} (Stock: ${i.current_qty})">`).join('');
     }
 
-window.addItem = (type) => {
-    const inputId = type === 'Service' ? 'service-select-input' : 'part-select-input';
-    const input = document.getElementById(inputId);
-    
-    // CLEAN THE INPUT: Again, ensure we get just the name "Mitsubishi Tire"
-    const typedValue = input.value.includes(' (Stock:') ? input.value.split(' (Stock:')[0].trim() : input.value.trim(); 
+    window.addItem = (type) => {
+        const inputId = type === 'Service' ? 'service-select-input' : 'part-select-input';
+        const input = document.getElementById(inputId);
+        const typedValue = input.value.includes(' (Stock:') ? input.value.split(' (Stock:')[0].trim() : input.value.trim(); 
 
-    if (type === 'Service') {
-        const found = serviceData.find(s => s.service_name === typedValue);
-        if (!found) return alert("Service not found!");
-        selectedItems.push({ type, name: found.service_name, price: found.price, id: found.id });
-    } else {
-        const found = inventoryData.find(i => i.item_name === typedValue);
-        
-        if (!found) return alert("Part not found in inventory!");
-        if (found.current_qty <= 0) return alert("Part is out of stock!");
+        if (type === 'Service') {
+            // Case-insensitive find
+            const found = serviceData.find(s => s.service_name.toLowerCase() === typedValue.toLowerCase());
+            if (!found) return alert("Service not found!");
+            selectedItems.push({ type, name: found.service_name, price: found.price, id: found.id });
+        } else {
+            // Case-insensitive find
+            const found = inventoryData.find(i => i.item_name.toLowerCase() === typedValue.toLowerCase());
+            
+            if (!found) return alert("Part not found in inventory!");
+            if (found.current_qty <= 0) return alert("Part is out of stock!");
 
-        found.current_qty--; 
-        selectedItems.push({ type, name: found.item_name, price: found.price, id: found.id });
-    }
+            found.current_qty--; 
+            selectedItems.push({ type, name: found.item_name, price: found.price, id: found.id });
+        }
 
-    // Reset UI
-    input.value = ''; 
-    document.getElementById('alt-suggestion-box').innerHTML = ""; 
-    renderDatalists(); 
-    updateSummary(); 
-};
-    
+        input.value = ''; 
+        document.getElementById('alt-suggestion-box').innerHTML = ""; 
+        renderDatalists(); 
+        updateSummary(); 
+    };
 
-    function updateSummary() {
+    window.checkAlternatives = (val) => {
+        const suggestionBox = document.getElementById('alt-suggestion-box');
+        if (!val || val.trim() === "") {
+            suggestionBox.innerHTML = "";
+            return;
+        }
+
+        const typedName = val.includes(' (Stock:') ? val.split(' (Stock:')[0].trim() : val.trim();
+        // Case-insensitive find
+        const currentItem = inventoryData.find(i => i.item_name.toLowerCase() === typedName.toLowerCase());
+
+        if (!currentItem) {
+            suggestionBox.innerHTML = "";
+            return;
+        }
+
+        // Logic for finding alternatives
+        const alternatives = inventoryData.filter(i => 
+            currentItem.oem_ref_id !== null && 
+            i.oem_ref_id === currentItem.oem_ref_id && 
+            i.id !== currentItem.id // Better than name check
+        );
+
+        if (alternatives.length > 0) {
+            const listItems = alternatives.map(a => 
+                `<div style="margin-bottom: 4px;">
+                    <b style="color: #27ae60;">${a.item_name}</b> 
+                    <span style="color: #888;">(₱${a.price} | Stock: ${a.current_qty})</span>
+                </div>`
+            ).join('');
+            suggestionBox.innerHTML = `<strong>💡 Alternatives found:</strong><br>${listItems}`;
+        } else {
+            suggestionBox.innerHTML = `<span style="color: #e67e22;">ℹ️ No alternatives available for this part.</span>`;
+        }
+    };
+
+    window.updateSummary = () => {
         const list = document.getElementById('booking-list');
         let total = 0;
-        
         list.innerHTML = selectedItems.map((item, index) => {
             total += item.price;
             return `
@@ -227,51 +258,12 @@ window.addItem = (type) => {
                 </li>`;
         }).join('');
         document.getElementById('total-price').innerText = total;
-    }
-
-window.checkAlternatives = (val) => {
-    const suggestionBox = document.getElementById('alt-suggestion-box');
-    
-    if (!val || val.trim() === "") {
-        suggestionBox.innerHTML = "";
-        return;
-    }
-
-    // CLEAN THE INPUT: Strip out the "(Stock: XX)" part to find the real name
-    const typedName = val.includes(' (Stock:') ? val.split(' (Stock:')[0].trim() : val.trim();
-    const currentItem = inventoryData.find(i => i.item_name === typedName);
-
-    if (!currentItem) {
-        suggestionBox.innerHTML = "";
-        return;
-    }
-
-    // Logic for finding group alternatives (Items with same oem_ref_id but different names)
-    const alternatives = inventoryData.filter(i => 
-        currentItem.oem_ref_id !== null && 
-        i.oem_ref_id === currentItem.oem_ref_id && 
-        i.item_name !== currentItem.item_name
-    );
-
-    if (alternatives.length > 0) {
-        const listItems = alternatives.map(a => 
-            `<div style="margin-bottom: 4px;">
-                <b style="color: #27ae60;">${a.item_name}</b> 
-                <span style="color: #888;">(₱${a.price} | Stock: ${a.current_qty})</span>
-            </div>`
-        ).join('');
-        
-        suggestionBox.innerHTML = `<strong>💡 Alternatives found:</strong><br>${listItems}`;
-    } else {
-        // This will now correctly trigger for your Mitsubishi Tire (OEM ID: 2)
-        suggestionBox.innerHTML = `<span style="color: #e67e22;">ℹ️ No alternatives available for this part.</span>`;
-    }
-};
+    };
 
     window.removeItem = (index) => {
         const item = selectedItems[index];
         if (item.type === 'Part') {
-            const found = inventoryData.find(i => i.item_name === item.name);
+            const found = inventoryData.find(i => i.id === item.id);
             if (found) found.current_qty++;
         }
         selectedItems.splice(index, 1);
