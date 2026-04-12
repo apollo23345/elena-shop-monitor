@@ -95,7 +95,26 @@
         <button class="btn btn-done" onclick="location.href='dashboard.html'">Finalize & Close</button>
     </div>
 
+</body>
     <script type="module">
+        // 1. IDENTITY CHECK
+        const user = JSON.parse(localStorage.getItem('currentUser'));
+        if (!user) {
+       window.location.href = 'login.html';
+        } else {
+        document.getElementById('display-user-name').innerText = user.first_name + " " + user.last_name;
+       // Show Admin button only if manager_id is null
+      if (user.manager_id === null) {
+        document.getElementById('admin-nav').style.display = 'block';
+        }
+    }
+
+    // 2. LOGOUT FUNCTION
+    window.logout = () => {
+        localStorage.removeItem('currentUser');
+        window.location.href = 'login.html';
+    };
+        
         import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
         const supabaseUrl = 'https://yrqtnaxnshkkizradtsd.supabase.co'
         const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlycXRuYXhuc2hra2l6cmFkdHNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3ODY5NTMsImV4cCI6MjA5MTM2Mjk1M30.dBveYrCJ24XIkyx6rc-iVaYkdOBGgsa-wuCV2shr1cY'
@@ -145,5 +164,5 @@
 
         loadReceipt();
     </script>
-</body>
+
 </html>
