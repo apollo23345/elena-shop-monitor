@@ -96,10 +96,13 @@
     
     <hr>
     
-    <label>Type/Select Parts/Inventory</label>
-    <input list="part-options" id="part-select-input" placeholder="Start typing a part...">
-    <datalist id="part-options"></datalist>
-    <button onclick="addItem('Part')">Add Part</button>
+<label>Type/Select Parts/Inventory</label>
+<input list="part-options" id="part-select-input" placeholder="Start typing a part..." oninput="checkAlternatives(this.value)">
+<datalist id="part-options"></datalist>
+
+<div id="alt-suggestion-box" style="font-size: 0.85em; color: #2ecc71; margin-top: 5px; font-style: italic;"></div>
+
+<button onclick="addItem('Part')">Add Part</button>
 </div>
 
         <div class="card">
@@ -185,10 +188,6 @@
             const found = inventoryData.find(i => i.item_name === typedValue);
             if (!found || found.current_qty <= 0) return alert("Part unavailable or out of stock!");
 
-            if (found.oem_ref_id) {
-                const alt = inventoryData.find(i => i.id === found.oem_ref_id);
-                if (alt) alert(`💡 ALTERNATIVE FOUND: You can also use ${alt.item_name} (₱${alt.price})`);
-            }
 
             found.current_qty--; 
             selectedItems.push({ type, name: found.item_name, price: found.price, id: found.id });
@@ -216,6 +215,23 @@
         }).join('');
         document.getElementById('total-price').innerText = total;
     }
+
+    window.checkAlternatives = (val) => {
+    const suggestionBox = document.getElementById('alt-suggestion-box');
+    suggestionBox.innerText = ""; // Clear previous suggestion
+
+    // Clean the input name
+    const typedName = val.split(' (Stock:')[0].trim();
+    const found = inventoryData.find(i => i.item_name === typedName);
+
+    // If part exists and has an alternative ID
+    if (found && found.oem_ref_id) {
+        const alt = inventoryData.find(i => i.id === found.oem_ref_id);
+        if (alt) {
+            suggestionBox.innerText = `💡 Suggestion: ${alt.item_name} is a compatible alternative (₱${alt.price})`;
+        }
+    }
+};
 
     window.removeItem = (index) => {
         const item = selectedItems[index];
