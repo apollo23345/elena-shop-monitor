@@ -171,22 +171,20 @@
         renderDatalists();
     }
 
-function renderDatalists() {
-    document.getElementById('service-options').innerHTML = serviceData.map(s => 
-        `<option value="${s.service_name}">`
-    ).join('');
-    
-    // REMOVED the .filter(i => i.current_qty > 0)
-    document.getElementById('part-options').innerHTML = inventoryData
-        .map(i => `<option value="${i.item_name} (Stock: ${i.current_qty})">`).join('');
-}
+    function renderDatalists() {
+        document.getElementById('service-options').innerHTML = serviceData.map(s => 
+            `<option value="${s.service_name}">`
+        ).join('');
+        
+        document.getElementById('part-options').innerHTML = inventoryData
+            .filter(i => i.current_qty > 0)
+            .map(i => `<option value="${i.item_name} (Stock: ${i.current_qty})">`).join('');
+    }
 
 window.addItem = (type) => {
     const inputId = type === 'Service' ? 'service-select-input' : 'part-select-input';
     const input = document.getElementById(inputId);
-    
-    // Cleanly get the name without stock info
-    let typedValue = input.value.split(/\s*\(/)[0].trim().toLowerCase(); 
+    let typedValue = input.value.split(' (Stock:')[0].trim().toLowerCase(); 
 
     if (type === 'Service') {
         const found = serviceData.find(s => s.service_name.toLowerCase() === typedValue);
@@ -195,20 +193,22 @@ window.addItem = (type) => {
     } else {
         const found = inventoryData.find(i => i.item_name.trim().toLowerCase() === typedValue);
         
-        if (!found) return alert("Part not found!");
-
-        // BLOCK adding to summary, but the alternatives box is already showing!
+        // Scenario 1: Part doesn't exist
+        if (!found) return alert("Part not found in inventory!");
+        
+        // Scenario 2: "Too bad, no buy" (Out of stock)
         if (found.current_qty <= 0) {
-            return alert("CANNOT ADD TO ORDER: This part is out of stock. Please check the alternatives listed below!");
+            return alert("Out of stock! You cannot add this part.");
         }
 
+        // Scenario 3: Has stock, proceed to "Buy"
         found.current_qty--; 
         selectedItems.push({ type, name: found.item_name, price: found.price, id: found.id });
     }
 
+    // Reset UI
     input.value = ''; 
-    // We DON'T clear the suggestion box here if you want it to stay visible after a failed add
-    // document.getElementById('alt-suggestion-box').innerHTML = ""; 
+    document.getElementById('alt-suggestion-box').innerHTML = ""; 
     renderDatalists(); 
     updateSummary(); 
 };
@@ -247,6 +247,8 @@ window.checkAlternatives = (val) => {
         // THIS is what you want: explicitly show there's nothing else.
         suggestionBox.innerHTML = `<span style="color: #e67e22;">ℹ️ No alternatives available for this part.</span>`;
     }
+};
+
 
     window.updateSummary = () => {
         const list = document.getElementById('booking-list');
