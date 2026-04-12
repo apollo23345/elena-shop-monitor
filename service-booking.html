@@ -213,40 +213,42 @@ window.addItem = (type) => {
     updateSummary(); 
 };
 
-window.checkAlternatives = (val) => {
-    const suggestionBox = document.getElementById('alt-suggestion-box');
+window.addItem = (type) => {
+    const inputId = type === 'Service' ? 'service-select-input' : 'part-select-input';
+    const input = document.getElementById(inputId);
     
-    if (!val || val.trim() === "") {
-        suggestionBox.innerHTML = "";
-        return;
-    }
+    // NEW LOGIC: This Regex looks for " (" and removes everything after it, 
+    // or just trims if the stock info isn't there.
+    let typedValue = input.value.split(/\s*\(/)[0].trim().toLowerCase(); 
 
-    // Clean the input name
-    const typedName = val.split(' (Stock:')[0].trim().toLowerCase();
-    const currentItem = inventoryData.find(i => i.item_name.trim().toLowerCase() === typedName);
-
-    // If we haven't found the part yet (user still typing), just wait.
-    if (!currentItem) return; 
-
-    // Find other parts with the same OEM ID, but NOT the same unique ID
-    const alternatives = inventoryData.filter(i => 
-        i.oem_ref_id !== null && 
-        i.oem_ref_id === currentItem.oem_ref_id && 
-        i.id !== currentItem.id
-    );
-
-    if (alternatives.length > 0) {
-        const listItems = alternatives.map(a => 
-            `<div style="margin-bottom: 4px;">
-                <b style="color: #27ae60;">${a.item_name}</b> 
-                <span style="color: #888;">(₱${a.price} | Stock: ${a.current_qty})</span>
-            </div>`
-        ).join('');
-        suggestionBox.innerHTML = `<strong>💡 Alternatives found:</strong><br>${listItems}`;
+    if (type === 'Service') {
+        const found = serviceData.find(s => s.service_name.toLowerCase() === typedValue);
+        if (!found) return alert("Service not found!");
+        selectedItems.push({ type, name: found.service_name, price: found.price, id: found.id });
     } else {
-        // THIS is what you want: explicitly show there's nothing else.
-        suggestionBox.innerHTML = `<span style="color: #e67e22;">ℹ️ No alternatives available for this part.</span>`;
+        // We match against the item_name in your Supabase table
+        const found = inventoryData.find(i => i.item_name.trim().toLowerCase() === typedValue);
+        
+        if (!found) {
+            // DEBUG: This will tell us exactly what the computer is trying to find
+            console.log("Searching for:", typedValue);
+            console.log("Available in inventoryData:", inventoryData.map(i => i.item_name.toLowerCase()));
+            return alert(`Part not found! The computer tried to find: "${typedValue}"`);
+        }
+        
+        if (found.current_qty <= 0) {
+            return alert("Out of stock! You cannot add this part.");
+        }
+
+        found.current_qty--; 
+        selectedItems.push({ type, name: found.item_name, price: found.price, id: found.id });
     }
+
+    input.value = ''; 
+    const altBox = document.getElementById('alt-suggestion-box');
+    if (altBox) altBox.innerHTML = ""; 
+    renderDatalists(); 
+    updateSummary(); 
 };
 
 
