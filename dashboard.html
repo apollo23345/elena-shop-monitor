@@ -27,6 +27,12 @@
             cursor: not-allowed;
             pointer-events: none;
         }
+        /* Disable the Dashboard button specifically when assignment is pending */
+.nav-locked button.active {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
         /* Disable Finish Job buttons when an assignment is pending */
 .nav-locked .btn-finish {
     opacity: 0.5;
@@ -109,11 +115,11 @@
     let selectedBayId = null;
 
     // 1. LOCK NAVIGATION & SHOW ALERT
-    if (plate) {
-        document.getElementById('pending-alert').style.display = 'block';
-        document.getElementById('pending-info').innerText = `${name} (${plate})`;
-        document.getElementById('navbar').classList.add('nav-locked');
-    }
+if (plate) {
+    document.getElementById('pending-alert').style.display = 'block';
+    document.getElementById('pending-info').innerText = `${name} (${plate})`;
+    document.getElementById('navbar').classList.add('nav-locked'); // This triggers the CSS
+}
 
     // 2. CANCEL TRANSACTION FUNCTION
 window.cancelPendingTransaction = async () => {
@@ -230,21 +236,34 @@ grid.innerHTML = bays.map(bay => {
         }
     };
 
-    window.releaseBay = async (id) => {
-        // BUG FIX: Prevent releasing a bay if we are in the middle of an assignment
+window.releaseBay = async (id) => {
     if (plate) {
         alert("Please finish or cancel the current assignment before finishing other jobs.");
         return;
     }
-        if(!confirm("Are you sure this job is finished?")) return;
-        const { data: bay } = await supabase.from('bays').select('*').eq('id', id).single();
-        if (!bay) return;
+    
+    if(!confirm("Are you sure this job is finished?")) return;
 
-        await supabase.from('bays').update({ status: 'Available', current_plate: null, current_customer: null, current_mechanic_id: null }).eq('id', id);
-        if (bay.current_mechanic_id) await supabase.from('mechanics').update({ status: 'Available' }).eq('id', bay.current_mechanic_id);
-        
-        window.location.href = `checkout.html?plate=${bay.current_plate}&name=${encodeURIComponent(bay.current_customer)}`;
-    };
+    // 1. Get the data BEFORE we clear it
+    const { data: bay } = await supabase.from('bays').select('*').eq('id', id).single();
+    if (!bay) return;
+
+    // 2. Clear the bay
+    await supabase.from('bays').update({ 
+        status: 'Available', 
+        current_plate: null, 
+        current_customer: null, 
+        current_mechanic_id: null 
+    }).eq('id', id);
+
+    // 3. Clear the mechanic
+    if (bay.current_mechanic_id) {
+        await supabase.from('mechanics').update({ status: 'Available' }).eq('id', bay.current_mechanic_id);
+    }
+    
+    // 4. Navigate using the data we saved in step 1
+    window.location.href = `checkout.html?plate=${bay.current_plate}&name=${encodeURIComponent(bay.current_customer)}`;
+};
 
     window.closeModal = () => document.getElementById('modal').style.display = 'none';
     window.logout = () => { localStorage.removeItem('currentUser'); window.location.href = 'login.html'; };
