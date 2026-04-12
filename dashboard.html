@@ -113,38 +113,42 @@
 window.cancelPendingTransaction = async () => {
     if (confirm("Discard this booking? Inventory items will be returned to stock.")) {
         
-// Change this line in dashboard.html
-const { data: items, error: fetchError } = await supabase
-    .from('transaction_details')
-    .select('item_name, qty, item_type') // Use 'qty' and 'item_type'
-    .eq('plate_number', plate);
-    
+        // 1. Fetch the pending items using the correct column names from your table
+        const { data: items, error: fetchError } = await supabase
+            .from('transaction_details')
+            .select('item_name, qty, item_type') 
+            .eq('plate_number', plate);
+        
         if (fetchError) {
             alert("Error fetching pending items: " + fetchError.message);
             return;
         }
 
-        // 2. Filter for only inventory items (type 'inventory') and restore stock
-        for (const item of items) {
-            if (item.type === 'inventory') {
-                // We use an RPC call or a manual update to increment the stock
-                // This assumes your inventory table uses 'item_name' as the identifier
-                const { data: invData } = await supabase
-                    .from('inventory')
-                    .select('quantity')
-                    .eq('item_name', item.item_name)
-                    .single();
-
-                if (invData) {
-                    await supabase
+        // 2. Loop through and restore stock
+        if (items) {
+            for (const item of items) {
+                // IMPORTANT: Your screenshot shows 'item_type' is "Part"
+                if (item.item_type === 'Part') { 
+                    
+                    // Fetch current stock using 'stock_quantity' (as seen in your screenshot)
+                    const { data: invData } = await supabase
                         .from('inventory')
-                        .update({ quantity: invData.quantity + item.quantity })
-                        .eq('item_name', item.item_name);
+                        .select('stock_quantity')
+                        .eq('item_name', item.item_name)
+                        .single();
+
+                    if (invData) {
+                        // Update using 'stock_quantity' and the 'qty' from transaction_details
+                        await supabase
+                            .from('inventory')
+                            .update({ stock_quantity: invData.stock_quantity + item.qty })
+                            .eq('item_name', item.item_name);
+                    }
                 }
             }
         }
 
-        // 3. Now safely delete the transaction details
+        // 3. Delete the records from transaction_details
         const { error: deleteError } = await supabase
             .from('transaction_details')
             .delete()
