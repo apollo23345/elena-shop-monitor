@@ -174,53 +174,55 @@ async function loadDashboard() {
             }
         };
 
-        window.confirmAssignment = async () => {
-            const mechId = document.getElementById('mech-select').value;
-            
-            // 1. Update Bay to Occupied
-            await supabase.from('bays').update({ 
-                status: 'Occupied', 
-                current_plate: plate, 
-                current_customer: name 
-            }).eq('id', selectedBayId);
+window.confirmAssignment = async () => {
+    const mechId = document.getElementById('mech-select').value;
+    
+    // 1. Update Bay to Occupied AND save the mechanic ID here
+    await supabase.from('bays').update({ 
+        status: 'Occupied', 
+        current_plate: plate, 
+        current_customer: name,
+        current_mechanic_id: mechId // <--- ADD THIS
+    }).eq('id', selectedBayId);
 
-            // 2. Update Mechanic to Busy
-            await supabase.from('mechanics').update({ status: 'Busy' }).eq('id', mechId);
+    // 2. Update Mechanic to Busy
+    await supabase.from('mechanics').update({ status: 'Busy' }).eq('id', mechId);
 
-            // 3. Clear URL and Refresh
-            window.location.href = 'dashboard.html';
-        };
+    window.location.href = 'dashboard.html';
+};
 
 window.releaseBay = async (id) => {
     if(!confirm("Are you sure this job is finished?")) return;
 
-    // 1. Get the current info (especially plate so we can find the mechanic)
+    // 1. Get the current info including the mechanic ID
     const { data: bay } = await supabase
         .from('bays')
-        .select('current_plate, current_customer')
+        .select('current_plate, current_customer, current_mechanic_id')
         .eq('id', id)
         .single();
 
     if (!bay) return;
 
-    // 2. Clear the bay
+    // 2. Clear the bay and the mechanic reference
     await supabase.from('bays')
         .update({ 
             status: 'Available', 
             current_plate: null, 
-            current_customer: null 
+            current_customer: null,
+            current_mechanic_id: null // <--- CLEAR THIS
         })
         .eq('id', id);
 
-    // 3. NEW: Find the mechanic who was working on this car and make them Available
-    // Note: This assumes you have a way to track which mechanic was on which car.
-    // If you don't have a 'current_car' column in mechanics, you might need to 
-    // manually set all mechanics to available or add that logic to your DB.
-    // For now, let's just refresh the dashboard.
-    
+    // 3. Set the specific mechanic back to Available
+    if (bay.current_mechanic_id) {
+        await supabase.from('mechanics')
+            .update({ status: 'Available' })
+            .eq('id', bay.current_mechanic_id);
+    }
+
+    // 4. Redirect to checkout
     window.location.href = `checkout.html?plate=${bay.current_plate}&name=${encodeURIComponent(bay.current_customer)}`;
 };
-
         window.closeModal = () => document.getElementById('modal').style.display = 'none';
         loadDashboard();
     </script>
