@@ -70,17 +70,15 @@
     </div>
 
     <script type="module">
-        // 1. IDENTITY CHECK
-const user = JSON.parse(localStorage.getItem('currentUser'));
-if (!user) {
-    window.location.href = 'login.html';
-} else {
-    document.getElementById('display-user-name').innerText = user.first_name + " " + user.last_name;
-    // Show Admin button only if manager_id is null
-    if (user.manager_id === null) {
-        document.getElementById('admin-nav').style.display = 'block';
-    }
-}
+        // 1. IDENTITY CHECK (Who is logged in?)
+        const user = JSON.parse(localStorage.getItem('currentUser'));
+        if (!user) {
+            window.location.href = 'login.html'; // Kick back to login if not logged in
+        } else {
+            document.getElementById('display-user-name').innerText = user.first_name + " " + user.last_name;
+            if (user.manager_id === null) {
+                document.getElementById('admin-nav').style.display = 'block';
+            }
 
 // 2. LOGOUT FUNCTION
 window.logout = () => {
@@ -88,12 +86,6 @@ window.logout = () => {
     window.location.href = 'login.html';
 };
 
-// 3. HIGHLIGHT CURRENT PAGE
-const currentPage = window.location.pathname.split("/").pop();
-if(currentPage === 'dashboard.html') document.getElementById('nav-dash').classList.add('active');
-if(currentPage === 'new-customer.html') document.getElementById('nav-cust').classList.add('active');
-if(currentPage === 'service-booking.html') document.getElementById('nav-book').classList.add('active');
-if(currentPage === 'checkout.html') document.getElementById('nav-check').classList.add('active');
 
         import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
         const supabaseUrl = 'https://yrqtnaxnshkkizradtsd.supabase.co'
