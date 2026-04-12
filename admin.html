@@ -222,15 +222,20 @@
     let allInventory = [];
     let allReceipts = [];
 
-    // Security & Init
-    const user = JSON.parse(localStorage.getItem('currentUser'));
-    if (!user || user.manager_id !== null) {
-        alert("Access Denied: Admins Only");
-        window.location.href = 'dashboard.html';
-    } else {
-        document.getElementById('display-user-name').innerText = user.first_name + " " + user.last_name + " (Admin)";
-        loadData('mechanics'); // Default tab
-    }
+    // Security & Init - Wrap in DOMContentLoaded to ensure tables exist
+    document.addEventListener('DOMContentLoaded', () => {
+        const user = JSON.parse(localStorage.getItem('currentUser'));
+        if (!user || user.manager_id !== null) {
+            alert("Access Denied: Admins Only");
+            window.location.href = 'dashboard.html';
+        } else {
+            document.getElementById('display-user-name').innerText = user.first_name + " " + user.last_name + " (Admin)";
+            // Load all data into memory immediately so search/sync works
+            loadData('mechanics'); 
+            loadData('services');
+            loadData('inventory');
+        }
+    });
 
     window.logout = () => {
         localStorage.removeItem('currentUser');
@@ -246,6 +251,7 @@
         const targetBtn = document.getElementById(btnId);
         if (targetBtn) targetBtn.classList.add('active-tab');
         
+        // Refresh data for the specific tab being opened
         if (tabName === 'receipts') {
             loadData('transactions');
         } else {
@@ -255,7 +261,7 @@
 
     async function loadData(table) {
         const { data, error } = await supabase.from(table).select('*').order('created_at', { ascending: false });
-        if (error) return console.error(error);
+        if (error) return console.error("Error fetching " + table, error);
 
         if (table === 'mechanics') { allMechanics = data; renderMechanicsTable(data); }
         else if (table === 'services') { allServices = data; renderServicesTable(data); }
@@ -273,7 +279,7 @@
             const date = new Date(r.created_at).toLocaleDateString();
             const rawItems = Array.isArray(r.items_json) ? r.items_json : [];
             
-            // GROUPING LOGIC FOR RECEIPT HISTORY
+            // GROUPING LOGIC FOR RECEIPT HISTORY (x1, x2, x3)
             const grouped = rawItems.reduce((acc, item) => {
                 acc[item.item_name] = (acc[item.item_name] || 0) + 1;
                 return acc;
@@ -288,7 +294,7 @@
                     <td>${date}</td>
                     <td><strong>${r.customer_name}</strong><br><small>${r.plate_number}</small></td>
                     <td>₱${parseFloat(r.total_amount || 0).toFixed(2)}</td>
-                    <td style="font-size: 0.85em; color: #666; max-width: 300px;">${itemPreview}</td>
+                    <td style="font-size: 0.85em; color: #666; max-width: 300px;">${itemPreview || 'No items recorded'}</td>
                     <td>
                         <button class="btn-del" onclick="handleRefund('${r.id}')">Void / Refund</button>
                     </td>
@@ -299,6 +305,7 @@
 
     function renderMechanicsTable(data) {
         const tbody = document.querySelector(`#table-mechanics tbody`);
+        if (!tbody) return;
         tbody.innerHTML = data.map(m => `
             <tr>
                 <td><input type="text" class="edit-input" id="edit-first-${m.id}" value="${m.first_name}"></td>
@@ -321,6 +328,7 @@
 
     function renderServicesTable(data) {
         const tbody = document.querySelector(`#table-services tbody`);
+        if (!tbody) return;
         tbody.innerHTML = data.map(s => `
             <tr>
                 <td><input type="text" class="edit-input" id="edit-srv-name-${s.id}" value="${s.service_name}"></td>
@@ -338,6 +346,7 @@
         if(dl) dl.innerHTML = data.map(i => `<option value="${i.item_name}">`).join('');
 
         const tbody = document.querySelector(`#table-inventory tbody`);
+        if (!tbody) return;
         tbody.innerHTML = data.map(i => `
             <tr>
                 <td><input type="text" class="edit-input" id="edit-inv-name-${i.id}" value="${i.item_name}"></td>
@@ -369,7 +378,7 @@
             }]).select();
 
             if (error) return alert(error.message);
-            if (!pickedOemId) {
+            if (!pickedOemId && data[0]) {
                 await supabase.from('inventory').update({ oem_ref_id: data[0].id }).eq('id', data[0].id);
             }
         } else if (table === 'services') {
@@ -400,7 +409,8 @@
         const match = allInventory.find(item => item.item_name === val);
         if (match) {
             const targetId = type === 'add' ? 'inv-oem-id' : `edit-inv-oem-${rowId}`;
-            document.getElementById(targetId).value = match.oem_ref_id || match.id;
+            const target = document.getElementById(targetId);
+            if(target) target.value = match.oem_ref_id || match.id;
         }
     };
 
@@ -439,7 +449,10 @@
     };
     window.filterReceipts = () => {
         const query = document.getElementById('receipt-search').value.toLowerCase();
-        renderReceiptsTable(allReceipts.filter(r => r.customer_name.toLowerCase().includes(query) || r.plate_number.toLowerCase().includes(query)));
+        renderReceiptsTable(allReceipts.filter(r => 
+            r.customer_name.toLowerCase().includes(query) || 
+            r.plate_number.toLowerCase().includes(query)
+        ));
     };
 </script>
 </html>
