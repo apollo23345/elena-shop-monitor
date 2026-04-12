@@ -110,17 +110,53 @@
     }
 
     // 2. CANCEL TRANSACTION FUNCTION
-    window.cancelPendingTransaction = async () => {
-        if(confirm("Discard this booking? This will delete the pending service items.")){
-            const { error } = await supabase
-                .from('transaction_details')
-                .delete()
-                .eq('plate_number', plate);
-            
-            if(!error) window.location.href = 'dashboard.html';
-            else alert("Error cancelling: " + error.message);
+window.cancelPendingTransaction = async () => {
+    if (confirm("Discard this booking? Inventory items will be returned to stock.")) {
+        
+        // 1. Get all items for this plate to see what needs to be returned
+        const { data: items, error: fetchError } = await supabase
+            .from('transaction_details')
+            .select('item_name, quantity, type')
+            .eq('plate_number', plate);
+
+        if (fetchError) {
+            alert("Error fetching pending items: " + fetchError.message);
+            return;
         }
-    };
+
+        // 2. Filter for only inventory items (type 'inventory') and restore stock
+        for (const item of items) {
+            if (item.type === 'inventory') {
+                // We use an RPC call or a manual update to increment the stock
+                // This assumes your inventory table uses 'item_name' as the identifier
+                const { data: invData } = await supabase
+                    .from('inventory')
+                    .select('quantity')
+                    .eq('item_name', item.item_name)
+                    .single();
+
+                if (invData) {
+                    await supabase
+                        .from('inventory')
+                        .update({ quantity: invData.quantity + item.quantity })
+                        .eq('item_name', item.item_name);
+                }
+            }
+        }
+
+        // 3. Now safely delete the transaction details
+        const { error: deleteError } = await supabase
+            .from('transaction_details')
+            .delete()
+            .eq('plate_number', plate);
+        
+        if (!deleteError) {
+            window.location.href = 'dashboard.html';
+        } else {
+            alert("Error deleting records: " + deleteError.message);
+        }
+    }
+};
 
     async function loadDashboard() {
         const { data: bays } = await supabase.from('bays').select('*').order('id');
