@@ -97,7 +97,8 @@
     <hr>
     
 <label>Type/Select Parts/Inventory</label>
-<input list="part-options" id="part-select-input" oninput="window.checkAlternatives(this.value)"><datalist id="part-options"></datalist>
+<input list="part-options" id="part-select-input" oninput="window.checkAlternatives(this.value)" placeholder="Start typing a part...">
+<datalist id="part-options"></datalist>
 
 <button onclick="addItem('Part')">Add Part</button>
 
@@ -171,20 +172,22 @@
         renderDatalists();
     }
 
-    function renderDatalists() {
-        document.getElementById('service-options').innerHTML = serviceData.map(s => 
-            `<option value="${s.service_name}">`
-        ).join('');
-        
-        document.getElementById('part-options').innerHTML = inventoryData
-            .filter(i => i.current_qty > 0)
-            .map(i => `<option value="${i.item_name} (Stock: ${i.current_qty})">`).join('');
-    }
+function renderDatalists() {
+    document.getElementById('service-options').innerHTML = serviceData.map(s => 
+        `<option value="${s.service_name}">`
+    ).join('');
+    
+    // REMOVE the .filter here so 0 stock items appear in the dropdown
+    document.getElementById('part-options').innerHTML = inventoryData
+        .map(i => `<option value="${i.item_name} (Stock: ${i.current_qty})">`).join('');
+}
 
 window.addItem = (type) => {
     const inputId = type === 'Service' ? 'service-select-input' : 'part-select-input';
     const input = document.getElementById(inputId);
-    let typedValue = input.value.split(' (Stock:')[0].trim().toLowerCase(); 
+    
+    // Use Regex to strip "(Stock: X)" properly even if spacing varies
+    let typedValue = input.value.split(/\s*\(/)[0].trim().toLowerCase(); 
 
     if (type === 'Service') {
         const found = serviceData.find(s => s.service_name.toLowerCase() === typedValue);
@@ -193,22 +196,20 @@ window.addItem = (type) => {
     } else {
         const found = inventoryData.find(i => i.item_name.trim().toLowerCase() === typedValue);
         
-        // Scenario 1: Part doesn't exist
         if (!found) return alert("Part not found in inventory!");
         
-        // Scenario 2: "Too bad, no buy" (Out of stock)
+        // Check stock AFTER finding it so checkAlternatives can still work
         if (found.current_qty <= 0) {
-            return alert("Out of stock! You cannot add this part.");
+            return alert("OUT OF STOCK: You cannot add this to the job summary, but you can see alternatives below.");
         }
 
-        // Scenario 3: Has stock, proceed to "Buy"
         found.current_qty--; 
         selectedItems.push({ type, name: found.item_name, price: found.price, id: found.id });
     }
 
-    // Reset UI
     input.value = ''; 
-    document.getElementById('alt-suggestion-box').innerHTML = ""; 
+    // Notice: We don't clear the alt-suggestion-box here 
+    // so the staff can still read the alternatives after the alert pops up.
     renderDatalists(); 
     updateSummary(); 
 };
