@@ -4,6 +4,28 @@
     <title>Elena's Shop - Dashboard</title>
 <link rel="stylesheet" href="style.css">
     <style>
+        .mech-tag {
+    padding: 8px 15px;
+    border-radius: 6px;
+    background: white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.9em;
+    border-left: 5px solid #ccc;
+}
+.mech-tag.available { border-left-color: var(--primary); }
+.mech-tag.busy { border-left-color: var(--danger); opacity: 0.8; }
+
+.status-dot {
+    height: 8px;
+    width: 8px;
+    border-radius: 50%;
+    display: inline-block;
+}
+.available .status-dot { background-color: var(--primary); }
+.busy .status-dot { background-color: var(--danger); }
     /* DASHBOARD CONTENT */
     /* Remove the .container wrapper around the grid so it can breathe */
     .dashboard-grid { 
@@ -58,7 +80,13 @@
         ⚠️ Assignment Pending for: <span id="pending-info"></span>. Click an Available Bay to Assign.
     </div>
 
-    <div class="dashboard-grid" id="bay-grid"></div>
+<div id="mechanic-section" style="max-width: 1200px; margin: 20px auto; padding: 0 20px;">
+    <h3 style="margin-bottom: 10px; color: var(--dark);">👨‍🔧 Mechanic Status</h3>
+    <div id="mechanic-list" style="display: flex; gap: 15px; flex-wrap: wrap;">
+        </div>
+</div>
+
+<div class="dashboard-grid" id="bay-grid"></div>
 
     <div id="modal">
         <div class="modal-content">
@@ -106,22 +134,35 @@
             document.getElementById('pending-info').innerText = `${name} (${plate})`;
         }
 
-        async function loadDashboard() {
-            const { data: bays } = await supabase.from('bays').select('*').order('id');
-            const grid = document.getElementById('bay-grid');
-            
-            grid.innerHTML = bays.map(bay => `
-                <div class="bay-card ${bay.status.toLowerCase()}" onclick="handleBayClick(${bay.id}, '${bay.status}', '${bay.bay_name}')">
-                    <div class="sticker">${bay.status.toUpperCase()}</div>
-                    <h2>${bay.bay_name}</h2>
-                    ${bay.status === 'Occupied' ? `
-                        <p><strong>${bay.current_customer}</strong></p>
-                        <p style="font-size: 0.9em; color: #666;">${bay.current_plate}</p>
-                        <button onclick="event.stopPropagation(); releaseBay(${bay.id})" style="margin-top:10px;">Finish Job</button>
-                    ` : '<p>Empty</p>'}
-                </div>
-            `).join('');
-        }
+async function loadDashboard() {
+    // 1. Fetch Data
+    const { data: bays } = await supabase.from('bays').select('*').order('id');
+    const { data: mechs } = await supabase.from('mechanics').select('*').order('name');
+    
+    // 2. Render Mechanics
+    const mechList = document.getElementById('mechanic-list');
+    mechList.innerHTML = mechs.map(m => `
+        <div class="mech-tag ${m.status.toLowerCase()}">
+            <span class="status-dot"></span>
+            <strong>${m.name}</strong> 
+            <small style="color:#666">(${m.status})</small>
+        </div>
+    `).join('');
+
+    // 3. Render Bays (Your existing logic)
+    const grid = document.getElementById('bay-grid');
+    grid.innerHTML = bays.map(bay => `
+        <div class="bay-card ${bay.status.toLowerCase()}" onclick="handleBayClick(${bay.id}, '${bay.status}', '${bay.bay_name}')">
+            <div class="sticker">${bay.status.toUpperCase()}</div>
+            <h2>${bay.bay_name}</h2>
+            ${bay.status === 'Occupied' ? `
+                <p><strong>${bay.current_customer}</strong></p>
+                <p style="font-size: 0.9em; color: #666;">${bay.current_plate}</p>
+                <button onclick="event.stopPropagation(); releaseBay(${bay.id})" style="margin-top:10px; background:#ff4d4d; color:white; border:none; padding:8px; border-radius:4px; cursor:pointer;">Finish Job</button>
+            ` : '<p style="color:#aaa">Empty</p>'}
+        </div>
+    `).join('');
+}
 
         window.handleBayClick = async (id, status, bayName) => {
             if (status === 'Available' && plate) {
@@ -151,7 +192,9 @@
         };
 
 window.releaseBay = async (id) => {
-    // 1. Get the current info BEFORE clearing it
+    if(!confirm("Are you sure this job is finished?")) return;
+
+    // 1. Get the current info (especially plate so we can find the mechanic)
     const { data: bay } = await supabase
         .from('bays')
         .select('current_plate, current_customer')
@@ -160,7 +203,7 @@ window.releaseBay = async (id) => {
 
     if (!bay) return;
 
-    // 2. Clear the bay in the database
+    // 2. Clear the bay
     await supabase.from('bays')
         .update({ 
             status: 'Available', 
@@ -169,7 +212,12 @@ window.releaseBay = async (id) => {
         })
         .eq('id', id);
 
-    // 3. Send BOTH plate and name to checkout
+    // 3. NEW: Find the mechanic who was working on this car and make them Available
+    // Note: This assumes you have a way to track which mechanic was on which car.
+    // If you don't have a 'current_car' column in mechanics, you might need to 
+    // manually set all mechanics to available or add that logic to your DB.
+    // For now, let's just refresh the dashboard.
+    
     window.location.href = `checkout.html?plate=${bay.current_plate}&name=${encodeURIComponent(bay.current_customer)}`;
 };
 
