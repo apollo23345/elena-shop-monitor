@@ -374,14 +374,22 @@ window.filterServices = () => {
 };
 
 window.filterInventory = () => {
-    const query = document.getElementById('inv-search').value.toLowerCase();
+    const query = document.getElementById('inv-search').value.toLowerCase().trim();
+    
+    // If search is empty, show everything
+    if (!query) {
+        renderInventoryTable(allInventory);
+        return;
+    }
+
     const filtered = allInventory.filter(i => {
         const name = (i.item_name || "").toLowerCase();
-        // Convert ID to string just in case it's stored as an int in Supabase
+        // Ensure OEM ID is treated as a string for searching
         const oem = i.oem_ref_id ? String(i.oem_ref_id).toLowerCase() : "";
         
         return name.includes(query) || oem.includes(query);
     });
+
     renderInventoryTable(filtered);
 };
 
@@ -491,19 +499,22 @@ window.saveInventory = async (id) => {
         }).join('');
     }
 
-function renderInventoryTable(data) {
+function renderInventoryTable(dataToDisplay) {
     const tbody = document.querySelector(`#table-inventory tbody`);
     if (!tbody) return;
     
-    // Populate the datalist for the "Alternative" search
+    // We always use allInventory (the full list) for the datalist 
+    // so the "Alternative" suggestions work even while filtering
     const datalist = document.getElementById('alt-items');
-    datalist.innerHTML = allInventory.map(i => `<option value="${i.item_name}">`).join('');
+    if (datalist) {
+        datalist.innerHTML = allInventory.map(i => `<option value="${i.item_name}">`).join('');
+    }
 
-    tbody.innerHTML = data.map(i => `
+    tbody.innerHTML = dataToDisplay.map(i => `
         <tr>
-            <td><input type="text" class="edit-input" id="edit-inv-name-${i.id}" value="${i.item_name}"></td>
-            <td><input type="number" class="edit-input" id="edit-inv-price-${i.id}" value="${i.price}"></td>
-            <td><input type="number" class="edit-input" id="edit-inv-qty-${i.id}" value="${i.stock_quantity}"></td>
+            <td><input type="text" class="edit-input" id="edit-inv-name-${i.id}" value="${i.item_name || ''}"></td>
+            <td><input type="number" class="edit-input" id="edit-inv-price-${i.id}" value="${i.price || 0}"></td>
+            <td><input type="number" class="edit-input" id="edit-inv-qty-${i.id}" value="${i.stock_quantity || 0}"></td>
             <td><input type="text" class="edit-input" id="edit-inv-oem-${i.id}" value="${i.oem_ref_id || ''}" readonly style="background:#f0f0f0;"></td>
             <td>
                 <input list="alt-items" class="edit-input" placeholder="Change Alt..." oninput="syncOEMRef(this, 'edit', '${i.id}')">
