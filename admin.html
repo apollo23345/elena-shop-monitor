@@ -71,18 +71,16 @@
         .search-container input {
             max-width: 300px;
         }
-
         /* Editing mode styles */
         .edit-input { width: 100%; padding: 5px; box-sizing: border-box; }
-
-        .status-badge {
-    padding: 4px 8px;
-    border-radius: 12px;
-    font-size: 0.85em;
-    text-transform: uppercase;
+        /* Add this below your .status-badge.confirmed style */
+.status-badge.completed { 
+    background: #f5f5f5; 
+    color: #616161; 
+    border: 1px solid #bdbdbd; 
 }
-.status-badge.active { background: #e3f2fd; color: #1976d2; border: 1px solid #1976d2; }
-.status-badge.confirmed { background: #e8f5e9; color: #2e7d32; border: 1px solid #2e7d32; }
+
+        
     </style>
 </head>
 <body>
@@ -520,23 +518,16 @@ window.saveBooking = async (id) => {
     const bayId = document.getElementById(`edit-bk-bay-${id}`).value;
     const mechId = document.getElementById(`edit-bk-mech-${id}`).value;
     const rawTime = document.getElementById(`edit-bk-time-${id}`).value;
-    // Status is no longer pulled from an input since it is view-only
+    const status = document.getElementById(`edit-bk-status-${id}`).value; // Add this line
 
     if (!rawTime) return alert("Please select a valid time.");
     const isoTime = new Date(rawTime).toISOString();
 
-    // TRIGGER CONFLICT CHECK
-    const hasConflict = await checkAdminConflict(id, bayId, mechId, isoTime);
-    if (hasConflict) {
-        alert("⚠️ Conflict Detected! Either the Mechanic or the Bay is already occupied at this time.");
-        return;
-    }
-
     const { error } = await supabase.from('bookings').update({
         bay_id: bayId,
         mechanic_id: mechId,
-        scheduled_time: isoTime
-        // We removed status from the update
+        scheduled_time: isoTime,
+        status: status // Add this line
     }).eq('id', id);
 
     if (error) alert(error.message);
@@ -683,7 +674,7 @@ function renderBookingsTable(data) {
     if (!tbody) return;
 
     // Filter to show only Active and Confirmed
-    const filteredData = data.filter(b => b.status === 'Active' || b.status === 'Confirmed');
+const filteredData = data.filter(b => b.status === 'Active' || b.status === 'Confirmed' || b.status === 'Completed');
 
     tbody.innerHTML = filteredData.map(b => {
         const localTime = new Date(b.scheduled_time).toLocaleString('sv-SE', { 
