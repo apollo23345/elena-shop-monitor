@@ -303,106 +303,60 @@ setInterval(() => {
 
 // --- UPDATED DASHBOARD LOADING ---
 async function loadDashboard() {
-    // 1. Fetch Bays, Mechanics, Transactions, and Bookings
-    const { data: bays, error: bayErr } = await supabase.from('bays').select('*').order('id');
-    const { data: mechs, error: mechErr } = await supabase.from('mechanics').select('*').order('first_name');
-    const { data: allItems, error: itemErr } = await supabase.from('transaction_details').select('*');
-    const { data: upcoming, error: upcomingErr } = await supabase
-        .from('bookings')
-        .select('*')
-        .eq('status', 'Confirmed')
-        .order('scheduled_time', {ascending: true});
-    
-    if (bayErr || mechErr || itemErr || upcomingErr) {
-        console.error("Fetch Error:", bayErr || mechErr || itemErr || upcomingErr);
-        return;
-    }
+    const { data: bays } = await supabase.from('bays').select('*').order('id');
+    const { data: mechs } = await supabase.from('mechanics').select('*');
+    const { data: allItems } = await supabase.from('transaction_details').select('*');
+    // Fetch bookings to get the IDs for active bay items
+    const { data: activeBookings } = await supabase.from('bookings').select('*').eq('status', 'Active');
+    const { data: upcoming } = await supabase.from('bookings').select('*').eq('status', 'Confirmed').order('scheduled_time');
 
-    // HELPER: Group items by name to prevent stacking
-    const getGroupedItemsHTML = (plateNum) => {
-        const items = allItems ? allItems.filter(item => item.plate_number === plateNum) : [];
+    const getGroupedItemsHTML = (bookingId) => {
+        // FILTER BY BOOKING_ID, NOT PLATE
+        const items = allItems ? allItems.filter(item => item.booking_id === bookingId) : [];
         if (items.length === 0) return '<p style="font-size:0.7em; color:gray; margin-top:5px;">No items added</p>';
 
-        // Reduce items into a map to sum quantities
         const grouped = items.reduce((acc, item) => {
-            if (!acc[item.item_name]) {
-                acc[item.item_name] = { qty: 0, price: item.price };
-            }
+            if (!acc[item.item_name]) acc[item.item_name] = { qty: 0, price: item.price };
             acc[item.item_name].qty += item.qty;
             return acc;
         }, {});
 
         return `<div class="item-list-display">
             ${Object.keys(grouped).map(name => `
-                <div class="item-row">
-                    <span>${grouped[name].qty}x ${name}</span>
-                    <span>₱${grouped[name].price * grouped[name].qty}</span>
-                </div>
+                <div class="item-row"><span>${grouped[name].qty}x ${name}</span><span>₱${grouped[name].price * grouped[name].qty}</span></div>
             `).join('')}
         </div>`;
     };
 
-    // 2. Render Mechanic Tags
-    document.getElementById('mechanic-list').innerHTML = mechs.map(m => `
-        <div class="mech-tag ${m.status.toLowerCase().replace(' ', '-')}">
-            <span class="status-dot"></span>
-            <strong>${m.first_name} ${m.last_name}</strong>
-        </div>
-    `).join('');
-
-    // 3. Render Bay Cards (Active Jobs)
+    // Render Bays
     document.getElementById('bay-grid').innerHTML = bays.map(bay => {
-        const assignedMech = mechs.find(m => String(m.id) === String(bay.current_mechanic_id));
-        const mechName = assignedMech ? `${assignedMech.first_name} ${assignedMech.last_name}` : "Assigning...";
-        const isOccupied = bay.status === 'Occupied' || bay.current_plate !== null;
-
+        const isOccupied = bay.status === 'Occupied';
+        const activeB = activeBookings ? activeBookings.find(b => b.bay_id === bay.id && b.plate_number === bay.current_plate) : null;
+        
         return `
             <div class="bay-card ${isOccupied ? 'occupied' : 'available'}" onclick="handleBayClick(${bay.id}, '${bay.status}', '${bay.bay_name}')">
                 <div class="sticker">${isOccupied ? 'OCCUPIED' : 'AVAILABLE'}</div>
                 <h2>${bay.bay_name}</h2>
                 ${isOccupied ? `
-                    <div style="background: #f9f9f9; padding: 10px; border-radius: 8px; text-align: left;">
-                        <p><strong>👤 ${bay.current_customer || 'Unknown'}</strong></p>
-                        <p style="font-size: 0.8em; color: #666;">🚗 ${bay.current_plate || 'No Plate'}</p>
-                        <p style="font-size: 0.8em; color: var(--primary);">🔧 ${mechName}</p>
-                        ${getGroupedItemsHTML(bay.current_plate)}
+                    <div style="text-align: left; background: #f9f9f9; padding: 10px; border-radius: 8px;">
+                        <p><strong>👤 ${bay.current_customer}</strong></p>
+                        <p style="font-size: 0.8em; color: #666;">🚗 ${bay.current_plate}</p>
+                        ${getGroupedItemsHTML(activeB?.id)} 
                     </div>
-                    <button class="btn-finish" onclick="event.stopPropagation(); releaseBay(${bay.id})" style="margin-top:10px; background:#ff4d4d; color:white; border:none; padding:8px; border-radius:4px; width: 100%;">Finish Job</button>
-                ` : '<p style="color:#aaa; margin-top:20px;">Ready for Job</p>'}
-            </div>
-        `;
+                    <button class="btn-finish" onclick="event.stopPropagation(); releaseBay(${bay.id})">Finish Job</button>
+                ` : '<p>Ready</p>'}
+            </div>`;
     }).join('');
 
-    // 4. Render Upcoming Bookings with Transactions & Dates
-    document.getElementById('booking-list').innerHTML = (upcoming && upcoming.length > 0) 
-        ? upcoming.map(b => {
-            const bayInfo = bays.find(bay => bay.id === b.bay_id);
-            const mechInfo = mechs.find(m => String(m.id) === String(b.mechanic_id));
-            const dateObj = new Date(b.scheduled_time);
-            
-            // Format: "Monday, Oct 24"
-            const dayString = dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
-            const timeString = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-            return `
-                <div style="background: white; border-left: 5px solid var(--primary); padding: 15px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
-                    <div style="font-weight: bold; color: var(--dark); margin-bottom: 5px;">
-                        📅 ${dayString} @ ${timeString}
-                    </div>
-                    <div style="font-size: 0.9em;"><strong>${b.customer_name}</strong> (${b.plate_number})</div>
-                    <div style="font-size: 0.8em; color: #666; margin: 4px 0;">
-                        📍 Bay: ${bayInfo ? bayInfo.bay_name : 'N/A'} | 🔧 Mech: ${mechInfo ? mechInfo.first_name : 'Assigning'}
-                    </div>
-                    <div class="booking-items">
-                        <strong>Items:</strong>
-                        ${getGroupedItemsHTML(b.plate_number)}
-                    </div>
-                </div>
-            `;
-        }).join('') 
-        : '<p style="color: gray;">No future bookings scheduled.</p>';
-}
-window.handleBayClick = async (id, status, bayName) => {
+    // Render Upcoming
+    document.getElementById('booking-list').innerHTML = upcoming.map(b => `
+        <div style="background: white; border-left: 5px solid var(--primary); padding: 15px; border-radius: 6px;">
+            <strong>${new Date(b.scheduled_time).toLocaleDateString()} @ ${new Date(b.scheduled_time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</strong>
+            <div>${b.customer_name} (${b.plate_number})</div>
+            ${getGroupedItemsHTML(b.id)}
+        </div>
+    `).join('');
+}window.handleBayClick = async (id, status, bayName) => {
     if (!plate) return; // Only allow click if we have a customer "on hand"
     
     selectedBayId = id;
@@ -425,57 +379,41 @@ window.handleBayClick = async (id, status, bayName) => {
 window.confirmAssignment = async () => {
     const mechId = document.getElementById('mech-select').value;
     const bookingInput = document.getElementById('booking-time').value;
-    
     if(!mechId) return alert("Please select a mechanic");
 
-    let targetTime;
-    try {
-        targetTime = timeMode === 'now' 
-            ? new Date().toISOString() 
-            : new Date(bookingInput).toISOString();
-    } catch (e) {
-        return alert("Invalid date/time selected.");
-    }
-
-    // --- UPDATED CONFLICT CHECK CALL ---
+    let targetTime = timeMode === 'now' ? new Date().toISOString() : new Date(bookingInput).toISOString();
+    
     const conflictMessage = await checkConflicts(selectedBayId, mechId, targetTime);
-    if (conflictMessage) {
-        return alert(`⚠️ Conflict! ${conflictMessage}`);
-    }
+    if (conflictMessage) return alert(`⚠️ Conflict! ${conflictMessage}`);
 
-    const numericMechId = parseInt(mechId);
+    // 1. Create the Booking entry first to get an ID
+    const { data: newBooking, error: bErr } = await supabase.from('bookings').insert([{
+        customer_name: name, 
+        plate_number: plate, 
+        bay_id: selectedBayId,
+        mechanic_id: parseInt(mechId),
+        scheduled_time: targetTime, 
+        status: timeMode === 'now' ? 'Active' : 'Confirmed'
+    }]).select().single();
+
+    if (bErr) return alert("Booking Error: " + bErr.message);
+
+    // 2. Link pending transaction items to THIS specific booking ID
+    // This prevents future bookings for the same plate from "stealing" these items
+    await supabase.from('transaction_details')
+        .update({ booking_id: newBooking.id })
+        .eq('plate_number', plate)
+        .is('booking_id', null); 
 
     if (timeMode === 'now') {
-        // ... (rest of your existing "now" logic remains the same)
-        const { error: bayError } = await supabase.from('bays').update({ 
+        await supabase.from('bays').update({ 
             status: 'Occupied', 
             current_plate: plate, 
             current_customer: name, 
-            current_mechanic_id: numericMechId 
+            current_mechanic_id: parseInt(mechId) 
         }).eq('id', selectedBayId);
         
-        await supabase.from('mechanics').update({ status: 'Busy' }).eq('id', numericMechId);
-        
-        await supabase.from('bookings').insert([{
-            customer_name: name, 
-            plate_number: plate, 
-            bay_id: selectedBayId,
-            mechanic_id: numericMechId,
-            scheduled_time: targetTime, 
-            status: 'Active'
-        }]);
-    } else {
-        // ... (rest of your existing "later" logic remains the same)
-        const { error: scheduleError } = await supabase.from('bookings').insert([{
-            customer_name: name, 
-            plate_number: plate, 
-            bay_id: selectedBayId,
-            mechanic_id: numericMechId, 
-            scheduled_time: targetTime, 
-            status: 'Confirmed'
-        }]);
-        
-        if (!scheduleError) alert("Booking scheduled successfully!");
+        await supabase.from('mechanics').update({ status: 'Busy' }).eq('id', parseInt(mechId));
     }
 
     window.location.href = 'dashboard.html';
