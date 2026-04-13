@@ -297,12 +297,29 @@ async function loadData(table) {
             // Use your actual DB columns: servicetype, serviceprice
             const { error } = await supabase.from('service').insert([{ servicetype: name, serviceprice: price }]);
             if (error) alert(error.message);
-        } else if (table === 'inventory') {
-            const name = document.getElementById('inv-name').value;
-            const price = document.getElementById('inv-price').value;
-            const qty = document.getElementById('inv-qty').value;
-            const { error } = await supabase.from('inventory').insert([{ item_name: name, price: price, stock_quantity: qty }]);
-            if (error) alert(error.message);
+} else if (table === 'inventory') {
+    const name = document.getElementById('inv-name').value;
+    const price = document.getElementById('inv-price').value;
+    const qty = document.getElementById('inv-qty').value;
+    const existingOem = document.getElementById('inv-oem-id').value;
+    
+    // If no alternative was selected, create a unique OEM ID (e.g., PART-12345)
+    const finalOem = existingOem || "OEM-" + Date.now();
+
+    const { error } = await supabase.from('inventory').insert([{ 
+        item_name: name, 
+        price: price, 
+        stock_quantity: qty,
+        oem_ref_id: finalOem 
+    }]);
+    
+    if (error) alert(error.message);
+    // Reset fields
+    document.getElementById('inv-name').value = '';
+    document.getElementById('inv-price').value = '';
+    document.getElementById('inv-qty').value = '';
+    document.getElementById('inv-alt-search').value = '';
+    document.getElementById('inv-oem-id').value = '';
            }         else if (table === 'mechanics') {
     const first = document.getElementById('mech-first').value;
     const last = document.getElementById('mech-last').value;
@@ -321,6 +338,21 @@ async function loadData(table) {
 
         loadData(table);
     };
+
+// oem ref id alternative functuin
+window.syncOEMRef = (input, mode, id = null) => {
+    const val = input.value;
+    // Find the original item that has the OEM Ref we want to copy
+    const originalItem = allInventory.find(i => i.item_name === val);
+    
+    if (mode === 'add') {
+        const hiddenInput = document.getElementById('inv-oem-id');
+        hiddenInput.value = originalItem ? originalItem.oem_ref_id : "";
+    } else if (mode === 'edit') {
+        const hiddenEditInput = document.getElementById(`edit-inv-oem-${id}`);
+        hiddenEditInput.value = originalItem ? originalItem.oem_ref_id : "";
+    }
+};
 // Save function 
     window.saveService = async (id) => {
         const name = document.getElementById(`edit-srv-name-${id}`).value;
@@ -352,7 +384,26 @@ async function loadData(table) {
         loadData('mechanics'); // Refresh the list
     }
 };
+window.saveInventory = async (id) => {
+    const name = document.getElementById(`edit-inv-name-${id}`).value;
+    const price = document.getElementById(`edit-inv-price-${id}`).value;
+    const qty = document.getElementById(`edit-inv-qty-${id}`).value;
+    const oem = document.getElementById(`edit-inv-oem-${id}`).value;
 
+    const { error } = await supabase.from('inventory').update({ 
+        item_name: name, 
+        price: price, 
+        stock_quantity: qty,
+        oem_ref_id: oem 
+    }).eq('id', id);
+
+    if (error) alert(error.message);
+    else {
+        alert("Inventory updated!");
+        loadData('inventory');
+    }
+};
+// delete function
     window.deleteItem = async (table, id) => {
         if(confirm("Are you sure?")) {
             const targetTable = table === 'services' ? 'service' : table;
@@ -396,20 +447,30 @@ async function loadData(table) {
         }).join('');
     }
 
-    function renderInventoryTable(data) {
-        const tbody = document.querySelector(`#table-inventory tbody`);
-        if (!tbody) return;
-        tbody.innerHTML = data.map(i => `
-            <tr>
-                <td>${i.item_name}</td>
-                <td>₱${i.price}</td>
-                <td>${i.stock_quantity}</td>
-                <td>${i.oem_ref_id || ''}</td>
-                <td>-</td>
-                <td><button class="btn-del" onclick="deleteItem('inventory', '${i.id}')">Del</button></td>
-            </tr>
-        `).join('');
-    }
+function renderInventoryTable(data) {
+    const tbody = document.querySelector(`#table-inventory tbody`);
+    if (!tbody) return;
+    
+    // Populate the datalist for the "Alternative" search
+    const datalist = document.getElementById('alt-items');
+    datalist.innerHTML = allInventory.map(i => `<option value="${i.item_name}">`).join('');
+
+    tbody.innerHTML = data.map(i => `
+        <tr>
+            <td><input type="text" class="edit-input" id="edit-inv-name-${i.id}" value="${i.item_name}"></td>
+            <td><input type="number" class="edit-input" id="edit-inv-price-${i.id}" value="${i.price}"></td>
+            <td><input type="number" class="edit-input" id="edit-inv-qty-${i.id}" value="${i.stock_quantity}"></td>
+            <td><input type="text" class="edit-input" id="edit-inv-oem-${i.id}" value="${i.oem_ref_id || ''}" readonly style="background:#f0f0f0;"></td>
+            <td>
+                <input list="alt-items" class="edit-input" placeholder="Change Alt..." oninput="syncOEMRef(this, 'edit', '${i.id}')">
+            </td>
+            <td>
+                <button class="btn-save" onclick="saveInventory('${i.id}')">Update</button>
+                <button class="btn-del" onclick="deleteItem('inventory', '${i.id}')">Del</button>
+            </td>
+        </tr>
+    `).join('');
+}
 
 function renderMechanicsTable(data) {
     const tbody = document.querySelector(`#table-mechanics tbody`);
