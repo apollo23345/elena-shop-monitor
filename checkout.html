@@ -117,23 +117,32 @@
     let currentItems = []; // CRITICAL: Now defined globally
     let allFoundTransactions = []; 
 
-    async function loadReceipt() {
-        if (!plate) return;
+async function loadReceipt() {
+    const bookingId = urlParams.get('booking_id'); // Get the specific ID from the URL
 
-        document.getElementById('res-name').innerText = name || "---";
-        document.getElementById('res-plate').innerText = plate;
-        document.getElementById('res-date').innerText = new Date().toLocaleDateString();
+    if (!plate) return;
 
-        const { data: items, error } = await supabase
-            .from('transaction_details')
-            .select('*')
-            .eq('plate_number', plate);
+    document.getElementById('res-name').innerText = name || "---";
+    document.getElementById('res-plate').innerText = plate;
+    document.getElementById('res-date').innerText = new Date().toLocaleDateString();
 
-        if (error) return console.error(error);
-        
-        currentItems = items || []; 
-        renderTable(currentItems);
+    let query = supabase.from('transaction_details').select('*');
+
+    // CRITICAL: If we have a bookingId, ONLY get items for that job.
+    // If not (manual lookup), fall back to plate.
+    if (bookingId) {
+        query = query.eq('booking_id', bookingId);
+    } else {
+        query = query.eq('plate_number', plate);
     }
+
+    const { data: items, error } = await query;
+
+    if (error) return console.error(error);
+    
+    currentItems = items || []; 
+    renderTable(currentItems);
+}
 
 function renderTable(items) {
         const tableBody = document.getElementById('items-body');
@@ -180,9 +189,9 @@ function renderTable(items) {
         document.getElementById('grand-total').innerText = grandTotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
     }
 window.saveAndFinish = async () => {
-    // Get the text and remove all commas before converting to a number
+    const bookingId = urlParams.get('booking_id');
     const totalText = document.getElementById('grand-total').innerText;
-    const cleanTotal = totalText.replace(/,/g, ''); // Removes commas
+    const cleanTotal = totalText.replace(/,/g, ''); 
     
     const customerName = document.getElementById('res-name').innerText;
     const resPlate = document.getElementById('res-plate').innerText;
@@ -192,22 +201,31 @@ window.saveAndFinish = async () => {
         return;
     }
 
+    // 1. Save to permanent history
     const { error } = await supabase.from('transactions').insert([{
         customer_name: customerName,
         plate_number: resPlate,
-        total_amount: parseFloat(cleanTotal), // Now correctly parses 1000.00
+        total_amount: parseFloat(cleanTotal),
         items_json: currentItems 
     }]);
 
     if (!error) {
-        await supabase.from('transaction_details').delete().eq('plate_number', resPlate);
+        // 2. CRITICAL: Only delete items that were part of THIS booking
+        if (bookingId) {
+            await supabase.from('transaction_details').delete().eq('booking_id', bookingId);
+        } else {
+            // Fallback for manual checkouts without a booking
+            await supabase.from('transaction_details').delete().eq('plate_number', resPlate);
+        }
+        
         alert("Transaction Saved Successfully!");
         window.location.href = 'dashboard.html';
     } else {
         alert("Error saving: " + error.message);
     }
 };
-    window.lookupPastTransaction = async () => {
+
+window.lookupPastTransaction = async () => {
         const searchPlate = document.getElementById('search-plate').value.trim().toUpperCase();
         if (!searchPlate) return;
 
