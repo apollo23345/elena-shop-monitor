@@ -102,6 +102,7 @@
     <button id="btn-srv" onclick="showTab('services')">Services</button>
     <button id="btn-inv" onclick="showTab('inventory')">Inventory</button>
     <button id="btn-receipts" onclick="showTab('receipts')">Receipts</button> 
+    <button id="btn-bk" onclick="showTab('bookings')">Bookings</button>
 </div>
 
     <div class="container">
@@ -210,6 +211,27 @@
         <tbody></tbody>
     </table>
 </div>
+<div id="tab-bookings" class="tab-content">
+    <h3>Manage Booking Schedule</h3>
+    <div class="form-inline">
+        <input type="text" id="bk-search-plate" placeholder="Search Plate Number..." onkeyup="filterBookings()">
+        <input type="date" id="bk-search-date" onchange="filterBookings()">
+        <button class="btn-del" onclick="resetBookingFilters()" style="flex:0; min-width: 80px;">Reset</button>
+    </div>
+    <table id="table-bookings">
+        <thead>
+            <tr>
+                <th>Customer / Plate</th>
+                <th>Bay</th>
+                <th>Mechanic</th>
+                <th>Scheduled Time</th>
+                <th>Status</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</div>
     </div>
 
 </body>
@@ -224,6 +246,10 @@
     let allServices = [];
     let allInventory = [];
     let allReceipts = [];
+    let allBookings = [];
+    let allBays = []; // Needed for the dropdowns 
+    
+
 
     // Security & Init
     document.addEventListener('DOMContentLoaded', () => {
@@ -238,14 +264,35 @@
             loadData('service');
             loadData('inventory');
             loadData('receipts');
+            loadData('bookings');
+            loadData('bays');
         }
     });
+
+    async function checkAdminConflict(bookingId, bayId, mechId, targetTime) {
+    const startTime = new Date(targetTime);
+    const rangeStart = new Date(startTime.getTime() - 45 * 60000).toISOString();
+    const rangeEnd = new Date(startTime.getTime() + 45 * 60000).toISOString();
+
+    const { data: conflicts } = await supabase
+        .from('bookings')
+        .select('id, customer_name')
+        .neq('id', bookingId) // Ignore the booking we are currently editing
+        .in('status', ['Confirmed', 'Active'])
+        .or(`bay_id.eq.${bayId},mechanic_id.eq.${mechId}`)
+        .gt('scheduled_time', rangeStart)
+        .lt('scheduled_time', rangeEnd);
+
+    return conflicts && conflicts.length > 0 ? true : false;
+}
 
     // --- CORE DATA LOADING ---
 async function loadData(table) {
     let targetTable = table;
     
-    // Logic to map the Tab Name to the actual Supabase Table Name
+    // Logic to map the Tab Name to the actual Supabase Table Name|
+    if (table === 'bookings') targetTable = 'bookings';
+    if (table === 'bays') targetTable = 'bays';
     if (table === 'services') targetTable = 'service';
     if (table === 'receipts') targetTable = 'transactions';
     // Ensure mechanics and inventory use their literal names
@@ -278,6 +325,13 @@ async function loadData(table) {
         allReceipts = data; 
         renderReceiptsTable(data); 
     }
+    else if (table === 'bookings') { 
+         allBookings = data; 
+    renderBookingsTable(data); 
+    }
+    else if (table === 'bays') { 
+       allBays = data; 
+    }
 }
 
     // --- WINDOW EXPORTS (Crucial for onclick to work) ---
@@ -286,8 +340,14 @@ async function loadData(table) {
         document.querySelectorAll('.admin-nav button').forEach(b => b.classList.remove('active-tab'));
         document.getElementById('tab-' + tabName).classList.add('active');
         
-        const btnId = 'btn-' + (tabName === 'mechanics' ? 'mech' : tabName === 'services' ? 'srv' : tabName === 'inventory' ? 'inv' : 'receipts');
-        const btn = document.getElementById(btnId);
+const btnId = 'btn-' + (
+    tabName === 'mechanics' ? 'mech' : 
+    tabName === 'services' ? 'srv' : 
+    tabName === 'inventory' ? 'inv' : 
+    tabName === 'receipts' ? 'receipts' : 'bk'
+);
+
+const btn = document.getElementById(btnId);
         if (btn) btn.classList.add('active-tab');
         
         loadData(tabName);
@@ -358,6 +418,27 @@ window.syncOEMRef = (input, mode, id = null) => {
 };
 
 // --- SEARCH FILTER FUNCTIONS ---
+window.filterBookings = () => {
+    const plateQuery = document.getElementById('bk-search-plate').value.toLowerCase();
+    const dateQuery = document.getElementById('bk-search-date').value;
+
+    const filtered = allBookings.filter(b => {
+        const matchesPlate = (b.plate_number || "").toLowerCase().includes(plateQuery);
+        let matchesDate = true;
+        if (dateQuery) {
+            const rowDate = new Date(b.scheduled_time).toISOString().split('T')[0];
+            matchesDate = rowDate === dateQuery;
+        }
+        return matchesPlate && matchesDate;
+    });
+    renderBookingsTable(filtered);
+};
+
+window.resetBookingFilters = () => {
+    document.getElementById('bk-search-plate').value = '';
+    document.getElementById('bk-search-date').value = '';
+    renderBookingsTable(allBookings);
+};
 
 window.filterMechanics = () => {
     const query = document.getElementById('mech-search').value.toLowerCase();
@@ -426,6 +507,43 @@ window.resetReceiptFilters = () => {
 };
 
 // Save function 
+window.saveBooking = async (id) => {
+    const bayId = document.getElementById(`edit-bk-bay-${id}`).value;
+    const mechId = document.getElementById(`edit-bk-mech-${id}`).value;
+    const rawTime = document.getElementById(`edit-bk-time-${id}`).value;
+    const status = document.getElementById(`edit-bk-status-${id}`).value;
+
+    if (!rawTime) return alert("Please select a valid time.");
+    const isoTime = new Date(rawTime).toISOString();
+
+    // TRIGGER CONFLICT CHECK
+    const hasConflict = await checkAdminConflict(id, bayId, mechId, isoTime);
+    if (hasConflict) {
+        alert("⚠️ Conflict Detected! Either the Mechanic or the Bay is already occupied at this time. Please choose a different slot.");
+        return;
+    }
+
+    const { error } = await supabase.from('bookings').update({
+        bay_id: bayId,
+        mechanic_id: mechId,
+        scheduled_time: isoTime,
+        status: status
+    }).eq('id', id);
+
+    if (error) alert(error.message);
+    else {
+        alert("Booking updated successfully!");
+        loadData('bookings');
+    }
+};
+
+window.deleteBooking = async (id) => {
+    if (!confirm("Delete this booking? This cannot be undone.")) return;
+    const { error } = await supabase.from('bookings').delete().eq('id', id);
+    if (error) alert(error.message);
+    else loadData('bookings');
+};
+
     window.saveService = async (id) => {
         const name = document.getElementById(`edit-srv-name-${id}`).value;
         const price = document.getElementById(`edit-srv-price-${id}`).value;
@@ -551,6 +669,46 @@ window.deleteItem = async (table, id) => {
 };
 
 // --- RENDER FUNCTIONS ---
+function renderBookingsTable(data) {
+    const tbody = document.querySelector(`#table-bookings tbody`);
+    if (!tbody) return;
+
+    tbody.innerHTML = data.map(b => {
+        // Format date for the input (datetime-local expects YYYY-MM-DDTHH:MM)
+        const localTime = new Date(b.scheduled_time).toLocaleString('sv-SE', { 
+            year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' 
+        }).replace(' ', 'T');
+
+        return `
+            <tr>
+                <td><strong>${b.customer_name}</strong><br><small>${b.plate_number}</small></td>
+                <td>
+                    <select id="edit-bk-bay-${b.id}">
+                        ${allBays.map(bay => `<option value="${bay.id}" ${bay.id == b.bay_id ? 'selected' : ''}>${bay.bay_name}</option>`).join('')}
+                    </select>
+                </td>
+                <td>
+                    <select id="edit-bk-mech-${b.id}">
+                        ${allMechanics.map(m => `<option value="${m.id}" ${m.id == b.mechanic_id ? 'selected' : ''}>${m.first_name}</option>`).join('')}
+                    </select>
+                </td>
+                <td><input type="datetime-local" id="edit-bk-time-${b.id}" value="${localTime}"></td>
+                <td>
+                    <select id="edit-bk-status-${b.id}">
+                        <option value="Confirmed" ${b.status === 'Confirmed' ? 'selected' : ''}>Confirmed</option>
+                        <option value="Active" ${b.status === 'Active' ? 'selected' : ''}>Active</option>
+                        <option value="Completed" ${b.status === 'Completed' ? 'selected' : ''}>Completed</option>
+                    </select>
+                </td>
+                <td>
+                    <button class="btn-save" onclick="saveBooking('${b.id}')">Save</button>
+                    <button class="btn-del" onclick="deleteBooking('${b.id}')">X</button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
     function renderServicesTable(data) {
         const tbody = document.querySelector(`#table-services tbody`);
         if (!tbody) return;
