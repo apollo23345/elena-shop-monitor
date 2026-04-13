@@ -226,16 +226,16 @@
         <button class="btn-del" onclick="resetBookingFilters()" style="flex:0; min-width: 80px;">Reset</button>
     </div>
     <table id="table-bookings">
-        <thead>
-            <tr>
-                <th>Customer / Plate</th>
-                <th>Bay</th>
-                <th>Mechanic</th>
-                <th>Scheduled Time</th>
-                <th>Status</th>
-                <th>Action</th>
-            </tr>
-        </thead>
+<thead>
+    <tr>
+        <th>Customer / Plate</th>
+        <th>Bay</th>
+        <th>Mechanic</th>
+        <th>Scheduled Time</th>
+        <th>Items Added</th> <th>Status</th>
+        <th>Action</th>
+    </tr>
+</thead>
         <tbody></tbody>
     </table>
 </div>
@@ -255,8 +255,7 @@
     let allReceipts = [];
     let allBookings = [];
     let allBays = []; // Needed for the dropdowns 
-    
-
+    let allTransactionDetails = []; // Add this to your Data Storage variables
 
     // Security & Init
     document.addEventListener('DOMContentLoaded', () => {
@@ -306,8 +305,13 @@ async function loadData(table) {
     if (table === 'mechanics') targetTable = 'mechanics'; 
     if (table === 'inventory') targetTable = 'inventory';
 
+// ADD THIS: Fetch transaction details whenever bookings or receipts are loaded
+    const { data: details } = await supabase.from('transaction_details').select('*');
+    allTransactionDetails = details || [];
+
     const { data, error } = await supabase.from(targetTable).select('*');
-    
+    // ... rest of your loadData function ...
+
     console.log(`Data for ${targetTable}:`, data, "Error:", error);
 
     if (error) {
@@ -673,10 +677,17 @@ function renderBookingsTable(data) {
     const tbody = document.querySelector(`#table-bookings tbody`);
     if (!tbody) return;
 
-    // Filter to show only Active and Confirmed
-const filteredData = data.filter(b => b.status === 'Active' || b.status === 'Confirmed' || b.status === 'Completed');
+    const filteredData = data.filter(b => b.status === 'Active' || b.status === 'Confirmed' || b.status === 'Completed');
 
     tbody.innerHTML = filteredData.map(b => {
+        // 1. Find items bought for THIS booking ID
+        const itemsForBooking = allTransactionDetails.filter(item => item.booking_id === b.id);
+        
+        // 2. Format the items list (e.g., "Toyota Tire, Oil Change")
+        const itemsList = itemsForBooking.length > 0 
+            ? itemsForBooking.map(i => i.item_name).join(', ') 
+            : '<span style="color:#999; font-style:italic;">No items added</span>';
+
         const localTime = new Date(b.scheduled_time).toLocaleString('sv-SE', { 
             year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' 
         }).replace(' ', 'T');
@@ -695,6 +706,9 @@ const filteredData = data.filter(b => b.status === 'Active' || b.status === 'Con
                     </select>
                 </td>
                 <td><input type="datetime-local" class="edit-input" id="edit-bk-time-${b.id}" value="${localTime}"></td>
+                
+                <td><small>${itemsList}</small></td> 
+                
                 <td>
                     <span class="status-badge ${b.status.toLowerCase()}">
                         <strong>${b.status}</strong>
@@ -708,7 +722,6 @@ const filteredData = data.filter(b => b.status === 'Active' || b.status === 'Con
         `;
     }).join('');
 }
-
     function renderServicesTable(data) {
         const tbody = document.querySelector(`#table-services tbody`);
         if (!tbody) return;
