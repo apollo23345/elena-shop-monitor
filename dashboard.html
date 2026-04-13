@@ -274,14 +274,14 @@ async function checkAndActivateBookings() {
             // Check if Bay is actually free
             const { data: bay } = await supabase.from('bays').select('status').eq('id', b.bay_id).single();
             
-            if (bay && bay.status === 'Available') {
-                // 1. Occupy Bay
-                await supabase.from('bays').update({
-                    status: 'Occupied',
-                    current_plate: b.plate_number,
-                    current_customer: b.customer_name,
-                    current_mechanic_id: b.mechanic_id
-                }).eq('id', b.bay_id);
+if (bay && bay.status === 'Available') {
+    await supabase.from('bays').update({
+        status: 'Occupied',
+        current_plate: b.plate_number,
+        current_customer: b.customer_name,
+        current_mechanic_id: b.mechanic_id,
+        current_booking_id: b.id // <--- ADD THIS (Make sure this column exists in your 'bays' table)
+    }).eq('id', b.bay_id);
 
                 // 2. Set Mechanic to Busy
                 await supabase.from('mechanics').update({ status: 'Busy' }).eq('id', b.mechanic_id);
@@ -406,57 +406,64 @@ window.confirmAssignment = async () => {
         .eq('plate_number', plate)
         .is('booking_id', null); 
 
-    if (timeMode === 'now') {
-        await supabase.from('bays').update({ 
-            status: 'Occupied', 
-            current_plate: plate, 
-            current_customer: name, 
-            current_mechanic_id: parseInt(mechId) 
-        }).eq('id', selectedBayId);
-        
-        await supabase.from('mechanics').update({ status: 'Busy' }).eq('id', parseInt(mechId));
-    }
+if (timeMode === 'now') {
+    await supabase.from('bays').update({ 
+        status: 'Occupied', 
+        current_plate: plate, 
+        current_customer: name, 
+        current_mechanic_id: parseInt(mechId),
+        current_booking_id: newBooking.id // <--- ADD THIS
+    }).eq('id', selectedBayId);
+    
+    await supabase.from('mechanics').update({ status: 'Busy' }).eq('id', parseInt(mechId));
+}
 
     window.location.href = 'dashboard.html';
 };
 
 window.releaseBay = async (id) => {
-    if (plate) {
-        alert("Please finish or cancel the current assignment before finishing other jobs.");
-        return;
-    }
-    
-    if(!confirm("Are you sure this job is finished?")) return;
+    // 1. Get the bay data
+    const { data: bay, error: bayErr } = await supabase.from('bays').select('*').eq('id', id).single();
+    if (bayErr || !bay) return alert("Error finding bay data.");
 
-    // 1. Get the bay and the SPECIFIC active booking for it
-    const { data: bay } = await supabase.from('bays').select('*').eq('id', id).single();
+    // 2. Identify the booking ID assigned to this bay
+    // If you haven't added 'current_booking_id' to your table yet, 
+    // we fetch it manually here to be safe:
     const { data: activeBooking } = await supabase.from('bookings')
         .select('id')
         .eq('bay_id', id)
+        .eq('status', 'Active')
         .eq('plate_number', bay.current_plate)
-        .eq('status', 'Active') // <--- ONLY target the active one
         .single();
 
-    if (!bay || !activeBooking) return alert("Could not find active booking record.");
+    if (!activeBooking) {
+        alert("Error: No active booking found for this bay.");
+        return;
+    }
 
-    // 2. Clear the bay
+    if(!confirm("Finish job and proceed to checkout?")) return;
+
+    // 3. Clear the bay
     await supabase.from('bays').update({ 
         status: 'Available', 
         current_plate: null, 
         current_customer: null, 
-        current_mechanic_id: null 
+        current_mechanic_id: null,
+        current_booking_id: null // Clear this too
     }).eq('id', id);
 
-    // 3. Clear the mechanic
+    // 4. Set mechanic to available
     if (bay.current_mechanic_id) {
         await supabase.from('mechanics').update({ status: 'Available' }).eq('id', bay.current_mechanic_id);
     }
 
-    // 4. Delete ONLY the active booking
-    await supabase.from('bookings').delete().eq('id', activeBooking.id);
+    // 5. DO NOT DELETE THE BOOKING YET. 
+    // Instead, mark it as 'Completed'. 
+    // This keeps the record so the Receipt knows what items to show!
+    await supabase.from('bookings').update({ status: 'Completed' }).eq('id', activeBooking.id);
     
-    // 5. Navigate to checkout with the BOOKING ID
-    window.location.href = `checkout.html?plate=${bay.current_plate}&name=${encodeURIComponent(bay.current_customer)}&booking_id=${activeBooking.id}`;
+    // 6. Go to checkout with the SPECIFIC booking ID
+    window.location.href = `checkout.html?booking_id=${activeBooking.id}&plate=${bay.current_plate}`;
 };
 
     window.closeModal = () => document.getElementById('modal').style.display = 'none';
