@@ -549,39 +549,67 @@ window.saveBooking = async (id) => {
 
 
 window.deleteBooking = async (id) => {
-    if (!confirm("Are you sure you want to cancel this booking? Items used will be returned to inventory.")) return;
+    if (!confirm("Are you sure you want to cancel this booking? All parts used will be returned to stock.")) return;
 
-    // 1. Find items associated with this specific booking
-    const itemsToReturn = allTransactionDetails.filter(item => item.booking_id === id);
+    try {
+        // 1. Fetch the items linked to this booking directly from the database
+        // This ensures we have the most current list of parts to return
+        const { data: itemsToReturn, error: fetchError } = await supabase
+            .from('transaction_details')
+            .select('item_name, item_type')
+            .eq('booking_id', id);
 
-    for (const item of itemsToReturn) {
-        // 2. We only care about restocking 'Part' types
-        if (item.item_type === 'Part') {
-            const { data: invItem } = await supabase
-                .from('inventory')
-                .select('id, stock_quantity')
-                .eq('item_name', item.item_name)
-                .maybeSingle();
+        if (fetchError) throw fetchError;
 
-            if (invItem) {
-                const newQty = (invItem.stock_quantity || 0) + 1;
-                await supabase.from('inventory')
-                    .update({ stock_quantity: newQty })
-                    .eq('id', invItem.id);
+        if (itemsToReturn && itemsToReturn.length > 0) {
+            console.log(`Found ${itemsToReturn.length} items to return to inventory.`);
+
+            for (const item of itemsToReturn) {
+                // 2. Only restock if it's a 'Part'
+                if (item.item_type === 'Part') {
+                    // 3. Find the item in inventory by its name
+                    const { data: invItem, error: invError } = await supabase
+                        .from('inventory')
+                        .select('id, stock_quantity')
+                        .eq('item_name', item.item_name)
+                        .maybeSingle();
+
+                    if (invItem) {
+                        const newQty = (invItem.stock_quantity || 0) + 1;
+                        
+                        // 4. Perform the update
+                        const { error: updateError } = await supabase
+                            .from('inventory')
+                            .update({ stock_quantity: newQty })
+                            .eq('id', invItem.id);
+                        
+                        if (updateError) console.error(`Failed to restock ${item.item_name}:`, updateError);
+                        else console.log(`Restocked: ${item.item_name} (New Qty: ${newQty})`);
+                    }
+                }
             }
         }
-    }
 
-    // 3. Delete the booking (Supabase should handle cascading or we manually clean up if needed)
-    const { error } = await supabase.from('bookings').delete().eq('id', id);
-    
-    if (error) alert(error.message);
-    else {
-        alert("Booking cancelled and inventory restocked.");
+        // 5. Finally, delete the booking record
+        const { error: deleteError } = await supabase
+            .from('bookings')
+            .delete()
+            .eq('id', id);
+
+        if (deleteError) throw deleteError;
+
+        alert("Booking cancelled. Inventory has been updated.");
+        
+        // Refresh local data
         loadData('bookings');
         loadData('inventory');
+
+    } catch (err) {
+        console.error("Cancellation Process Error:", err);
+        alert("An error occurred while cancelling: " + err.message);
     }
 };
+
     window.saveService = async (id) => {
         const name = document.getElementById(`edit-srv-name-${id}`).value;
         const price = document.getElementById(`edit-srv-price-${id}`).value;
