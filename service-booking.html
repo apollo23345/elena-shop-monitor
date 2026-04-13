@@ -196,7 +196,7 @@
             if (selectedItems.some(item => item.type === 'Service' && item.name.toLowerCase() === typedValue)) {
                 return alert("Service already added!");
             }
-            selectedItems.push({ type, name: found.servicetype, price: found.price, id: found.id, qty: 1 });
+            selectedItems.push({ type, name: found.servicetype, price: found.serviceprice, id: found.id, qty: 1 });
         } else {
             const qtyInput = document.getElementById('part-qty-input');
             const qtyToAdd = parseInt(qtyInput.value) || 1;
