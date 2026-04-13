@@ -321,7 +321,7 @@ async function loadData(table) {
 
         loadData(table);
     };
-
+// Save function 
     window.saveService = async (id) => {
         const name = document.getElementById(`edit-srv-name-${id}`).value;
         const price = document.getElementById(`edit-srv-price-${id}`).value;
@@ -329,6 +329,29 @@ async function loadData(table) {
         if (error) alert(error.message);
         loadData('service');
     };
+    window.saveMechanic = async (id) => {
+    const firstName = document.getElementById(`edit-mech-first-${id}`).value;
+    const lastName = document.getElementById(`edit-mech-last-${id}`).value;
+    const contact = document.getElementById(`edit-mech-contact-${id}`).value;
+    const status = document.getElementById(`edit-mech-status-${id}`).value;
+
+    const { error } = await supabase
+        .from('mechanics')
+        .update({ 
+            first_name: firstName, 
+            last_name: lastName, 
+            contact: contact,
+            status: status 
+        })
+        .eq('id', id);
+
+    if (error) {
+        alert("Update failed: " + error.message);
+    } else {
+        alert("Mechanic updated successfully!");
+        loadData('mechanics'); // Refresh the list
+    }
+};
 
     window.deleteItem = async (table, id) => {
         if(confirm("Are you sure?")) {
@@ -388,18 +411,25 @@ async function loadData(table) {
         `).join('');
     }
 
-    function renderMechanicsTable(data) {
-        const tbody = document.querySelector(`#table-mechanics tbody`);
-        if (!tbody) return;
-        tbody.innerHTML = data.map(m => `
-            <tr>
-                <td>${m.first_name}</td>
-                <td>${m.last_name}</td>
-                <td>${m.contact || ''}</td>
-                <td>${m.status}</td>
-                <td><button class="btn-del" onclick="deleteItem('mechanics', '${m.id}')">Del</button></td>
-            </tr>
-        `).join('');
-    }
-</script>
+function renderMechanicsTable(data) {
+    const tbody = document.querySelector(`#table-mechanics tbody`);
+    if (!tbody) return;
+    tbody.innerHTML = data.map(m => `
+        <tr>
+            <td><input type="text" class="edit-input" id="edit-mech-first-${m.id}" value="${m.first_name}"></td>
+            <td><input type="text" class="edit-input" id="edit-mech-last-${m.id}" value="${m.last_name}"></td>
+            <td><input type="text" class="edit-input" id="edit-mech-contact-${m.id}" value="${m.contact || ''}"></td>
+            <td>
+                <select id="edit-mech-status-${m.id}" class="edit-input">
+                    <option value="Available" ${m.status === 'Available' ? 'selected' : ''}>Available</option>
+                    <option value="Busy" ${m.status === 'Busy' ? 'selected' : ''}>Busy</option>
+                </select>
+            </td>
+            <td>
+                <button class="btn-save" onclick="saveMechanic('${m.id}')">Update</button>
+                <button class="btn-del" onclick="deleteItem('mechanics', '${m.id}')">Del</button>
+            </td>
+        </tr>
+    `).join('');
+}</script>
 </html>
