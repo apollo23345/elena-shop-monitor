@@ -151,7 +151,7 @@
 
     async function loadOptions() {
         try {
-            const { data: srv } = await supabase.from('services').select('*');
+            const { data: srv } = await supabase.from('service').select('*');
             const { data: inv } = await supabase.from('inventory').select('*');
             
             if (srv) serviceData = srv;
@@ -170,7 +170,7 @@
     function renderDatalists() {
         const srvList = document.getElementById('service-options');
         if (srvList) {
-            srvList.innerHTML = serviceData.map(s => `<option value="${s.service_name}">`).join('');
+            srvList.innerHTML = serviceData.map(s => `<option value="${s.servicetype}">`).join('');
         }
         
         const partList = document.getElementById('part-options');
@@ -191,12 +191,12 @@
         let typedValue = input.value.split(/\s*\(/)[0].trim().toLowerCase(); 
 
         if (type === 'Service') {
-            const found = serviceData.find(s => s.service_name.toLowerCase() === typedValue);
+            const found = serviceData.find(s => s.servicetype.toLowerCase() === typedValue);
             if (!found) return alert("Service not found!");
             if (selectedItems.some(item => item.type === 'Service' && item.name.toLowerCase() === typedValue)) {
                 return alert("Service already added!");
             }
-            selectedItems.push({ type, name: found.service_name, price: found.price, id: found.id, qty: 1 });
+            selectedItems.push({ type, name: found.servicetype, price: found.price, id: found.id, qty: 1 });
         } else {
             const qtyInput = document.getElementById('part-qty-input');
             const qtyToAdd = parseInt(qtyInput.value) || 1;
