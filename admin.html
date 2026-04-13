@@ -525,15 +525,14 @@ window.saveBooking = async (id) => {
 
     if (!rawTime) return alert("Please select a valid time.");
     
-    // Check for conflicts before saving
-    const hasConflict = await checkAdminConflict(id, bayId, mechId, rawTime);
-    if (hasConflict) {
-        if (!confirm("Conflict detected: This Mechanic or Bay is busy within 45 mins of this time. Save anyway?")) {
-            return;
-        }
+    // --- BLOCK PAST DATES ---
+    const selectedTime = new Date(rawTime);
+    const now = new Date();
+    if (selectedTime < now) {
+        return alert("Error: You cannot schedule a booking for a past date or time.");
     }
 
-    const isoTime = new Date(rawTime).toISOString();
+    const isoTime = selectedTime.toISOString();
 
     const { error } = await supabase.from('bookings').update({
         bay_id: bayId,
@@ -541,22 +540,48 @@ window.saveBooking = async (id) => {
         scheduled_time: isoTime
     }).eq('id', id);
 
-    if (error) {
-        alert("Update failed: " + error.message);
-    } else {
-        alert("Booking rescheduled successfully!");
+    if (error) alert(error.message);
+    else {
+        alert("Booking updated successfully!");
         loadData('bookings');
     }
 };
 
 
 window.deleteBooking = async (id) => {
-    if (!confirm("Delete this booking? This cannot be undone.")) return;
-    const { error } = await supabase.from('bookings').delete().eq('id', id);
-    if (error) alert(error.message);
-    else loadData('bookings');
-};
+    if (!confirm("Are you sure you want to cancel this booking? Items used will be returned to inventory.")) return;
 
+    // 1. Find items associated with this specific booking
+    const itemsToReturn = allTransactionDetails.filter(item => item.booking_id === id);
+
+    for (const item of itemsToReturn) {
+        // 2. We only care about restocking 'Part' types
+        if (item.item_type === 'Part') {
+            const { data: invItem } = await supabase
+                .from('inventory')
+                .select('id, stock_quantity')
+                .eq('item_name', item.item_name)
+                .maybeSingle();
+
+            if (invItem) {
+                const newQty = (invItem.stock_quantity || 0) + 1;
+                await supabase.from('inventory')
+                    .update({ stock_quantity: newQty })
+                    .eq('id', invItem.id);
+            }
+        }
+    }
+
+    // 3. Delete the booking (Supabase should handle cascading or we manually clean up if needed)
+    const { error } = await supabase.from('bookings').delete().eq('id', id);
+    
+    if (error) alert(error.message);
+    else {
+        alert("Booking cancelled and inventory restocked.");
+        loadData('bookings');
+        loadData('inventory');
+    }
+};
     window.saveService = async (id) => {
         const name = document.getElementById(`edit-srv-name-${id}`).value;
         const price = document.getElementById(`edit-srv-price-${id}`).value;
@@ -686,57 +711,46 @@ function renderBookingsTable(data) {
     const tbody = document.querySelector(`#table-bookings tbody`);
     if (!tbody) return;
 
-    // We show Active, Confirmed, and Completed
-    const filteredData = data.filter(b => ['Active', 'Confirmed', 'Completed'].includes(b.status));
-
-    tbody.innerHTML = filteredData.map(b => {
-        // Find items associated with this booking
+    tbody.innerHTML = data.filter(b => ['Active', 'Confirmed', 'Completed'].includes(b.status)).map(b => {
+        // --- ITEM GROUPING LOGIC (x1, x2, etc.) ---
         const itemsForBooking = allTransactionDetails.filter(item => item.booking_id === b.id);
-        
-        const itemsList = itemsForBooking.length > 0 
-            ? itemsForBooking.map(i => i.item_name).join(', ') 
-            : '<span style="color:#999; font-style:italic;">None</span>';
+        const counts = itemsForBooking.reduce((acc, item) => {
+            acc[item.item_name] = (acc[item.item_name] || 0) + 1;
+            return acc;
+        }, {});
 
-        // Format time for the datetime-local input
+        const itemsList = Object.entries(counts).length > 0 
+            ? Object.entries(counts).map(([name, qty]) => `${name} ${qty > 1 ? `<b>x${qty}</b>` : 'x1'}`).join(', ')
+            : '<span style="color:#999;">No items</span>';
+
         const localTime = new Date(b.scheduled_time).toLocaleString('sv-SE', { 
             year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' 
         }).replace(' ', 'T');
 
-        // Check if completed - if so, we might want to disable editing entirely
-        const isCompleted = b.status === 'Completed';
+        // LOCKING: Disable if Active OR Completed
+        const isLocked = b.status === 'Active' || b.status === 'Completed';
 
         return `
             <tr>
+                <td><strong>${b.customer_name}</strong><br><small>${b.plate_number}</small></td>
                 <td>
-                    <strong>${b.customer_name}</strong><br>
-                    <small class="plate-badge">${b.plate_number}</small>
-                </td>
-                <td>
-                    <select id="edit-bk-bay-${b.id}" class="edit-input" ${isCompleted ? 'disabled' : ''}>
+                    <select id="edit-bk-bay-${b.id}" class="edit-input" ${isLocked ? 'disabled' : ''}>
                         ${allBays.map(bay => `<option value="${bay.id}" ${bay.id == b.bay_id ? 'selected' : ''}>${bay.bay_name}</option>`).join('')}
                     </select>
                 </td>
                 <td>
-                    <select id="edit-bk-mech-${b.id}" class="edit-input" ${isCompleted ? 'disabled' : ''}>
+                    <select id="edit-bk-mech-${b.id}" class="edit-input" ${isLocked ? 'disabled' : ''}>
                         ${allMechanics.map(m => `<option value="${m.id}" ${m.id == b.mechanic_id ? 'selected' : ''}>${m.first_name} ${m.last_name}</option>`).join('')}
                     </select>
                 </td>
+                <td><input type="datetime-local" class="edit-input" id="edit-bk-time-${b.id}" value="${localTime}" ${isLocked ? 'disabled' : ''}></td>
+                <td><small>${itemsList}</small></td> 
+                <td><span class="status-badge ${b.status.toLowerCase()}">${b.status}</span></td>
                 <td>
-                    <input type="datetime-local" class="edit-input" id="edit-bk-time-${b.id}" value="${localTime}" ${isCompleted ? 'disabled' : ''}>
-                </td>
-                
-                <td style="max-width: 200px;"><small>${itemsList}</small></td> 
-                
-                <td>
-                    <span class="status-badge ${b.status.toLowerCase()}">
-                        ${b.status}
-                    </span>
-                </td>
-                <td>
-                    ${!isCompleted ? `
+                    ${!isLocked ? `
                         <button class="btn-save" onclick="saveBooking('${b.id}')">Update</button>
                         <button class="btn-del" onclick="deleteBooking('${b.id}')">Cancel</button>
-                    ` : `<small>Locked</small>`}
+                    ` : `<i style="font-size: 12px; color: #888;">Locked (${b.status})</i>`}
                 </td>
             </tr>
         `;
