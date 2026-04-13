@@ -298,24 +298,48 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 // Add this to your existing <script type="module">
 
+    // --- PROTECTION: ANTI-SPAM & AUTO-CLEANUP ---
+// --- 1. THE PROTECTION BRAIN (Cleanup by Age) ---
+async function cleanupOldBackups() {
+    const now = new Date();
+    const oneDayAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000)).toISOString();
+    const oneMonthAgo = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000)).toISOString();
+    const threeMonthsAgo = new Date(now.getTime() - (90 * 24 * 60 * 60 * 1000)).toISOString();
+
+    await supabase.from('backups').delete().eq('backup_type', 'Hour').lt('created_at', oneDayAgo);
+    await supabase.from('backups').delete().eq('backup_type', 'Day').lt('created_at', oneMonthAgo);
+    await supabase.from('backups').delete().eq('backup_type', 'Week').lt('created_at', threeMonthsAgo);
+    
+    console.log("Archive cleaned: Old records removed, important ones kept.");
+}
+
+// --- 2. THE BACKUP FUNCTION (With Cooldown & All Tables) ---
 window.createBackup = async (type) => {
-    // List of ALL tables that matter to the shop
-    const tablesToBackup = ['inventory', 'service', 'mechanics', 'bookings', 'transaction_details', 'bays']; 
+    // ANTI-SPAM: 5 minute cooldown
+    const lastClick = localStorage.getItem(`last_backup_${type}`);
+    const now = Date.now();
+    if (lastClick && (now - lastClick) < (5 * 60 * 1000)) {
+        const remaining = Math.ceil((5 * 60 * 1000 - (now - lastClick)) / 60000);
+        return alert(`⚠️ System Cool-down: Please wait ${remaining} minutes before another ${type} snapshot.`);
+    }
+
+    // ALL your important tables including transactions
+    const tablesToBackup = ['inventory', 'service', 'mechanics', 'bookings', 'transaction_details', 'bays', 'transactions']; 
     
     try {
         for (const tableName of tablesToBackup) {
             const { data: currentData, error: fetchErr } = await supabase.from(tableName).select('*');
-            
             if (fetchErr) throw fetchErr;
 
-            const { error: insErr } = await supabase.from('backups').insert([{
+            await supabase.from('backups').insert([{
                 table_name: tableName,
-                data_json: currentData, // Even if this contains JSON, Supabase handles it
+                data_json: currentData,
                 backup_type: type
             }]);
-            
-            if (insErr) throw insErr;
         }
+
+        localStorage.setItem(`last_backup_${type}`, Date.now());
+        await cleanupOldBackups(); 
         alert(`✅ Full ${type} System Snapshot Recorded.`);
         loadBackups();
     } catch (err) {
@@ -324,8 +348,8 @@ window.createBackup = async (type) => {
     }
 };
 
+// --- 3. THE RESTORE FUNCTION (Security Challenge) ---
 window.requestRestore = async (backupId) => {
-    // 1. IDENTITY CHALLENGE
     const userPrompt = prompt("ADMIN CLEARANCE REQUIRED: Enter your Username:");
     if (!userPrompt) return;
     
@@ -334,54 +358,61 @@ window.requestRestore = async (backupId) => {
 
     const currentUser = JSON.parse(localStorage.getItem('currentUser'));
 
-    // 2. VERIFY credentials from the current session
     if (userPrompt !== currentUser.username || passPrompt !== currentUser.password) {
         alert("❌ ACCESS DENIED: Credentials do not match current Admin.");
         return;
     }
 
-    if (!confirm("⚠️ WARNING: This will DELETE all current bookings/parts and restore the snapshot. Continue?")) return;
+    if (!confirm("⚠️ WARNING: This will DELETE all current table data and restore the snapshot. Continue?")) return;
 
     try {
-        // 3. GET BACKUP DATA
         const { data: backup } = await supabase.from('backups').select('*').eq('id', backupId).single();
         if (!backup) return alert("Backup file not found.");
 
         const tableName = backup.table_name;
         const restoredData = backup.data_json;
 
-        // 4. THE WIPE & REPLACEMENT
-        // Delete all rows in the target table
+        // Wipe and Replace
         const { error: delErr } = await supabase.from(tableName).delete().neq('id', -1); 
         if (delErr) throw delErr;
 
-        // Insert the snapshot data
         const { error: resErr } = await supabase.from(tableName).insert(restoredData);
         if (resErr) throw resErr;
 
-        alert(`✅ ${tableName} has been successfully reversed to the past state.`);
+        alert(`✅ ${tableName} has been successfully reversed.`);
         window.location.reload();
-
     } catch (err) {
         console.error("Restore failed:", err);
         alert("Critical Restore Error: " + err.message);
     }
 };
 
-// Update the list display
-async function loadBackups() {
-    const { data: backups } = await supabase.from('backups').select('*').order('created_at', { ascending: false });
+// --- 4. THE SMART LIST (Filters & UI) ---
+async function loadBackups(filterType = 'All') {
+    let query = supabase.from('backups').select('*').order('created_at', { ascending: false });
+    if (filterType !== 'All') query = query.eq('backup_type', filterType);
+
+    const { data: backups } = await query;
     const listDiv = document.getElementById('backup-list');
     
+    const filterHTML = `
+        <div style="margin-bottom: 10px; display: flex; gap: 5px;">
+            <button onclick="loadBackups('All')" style="font-size: 10px; padding:2px 5px; cursor:pointer;">All</button>
+            <button onclick="loadBackups('Hour')" style="font-size: 10px; padding:2px 5px; cursor:pointer;">Hours</button>
+            <button onclick="loadBackups('Day')" style="font-size: 10px; padding:2px 5px; cursor:pointer;">Days</button>
+            <button onclick="loadBackups('Week')" style="font-size: 10px; padding:2px 5px; cursor:pointer;">Weeks</button>
+        </div>
+    `;
+
     if (!backups || backups.length === 0) {
-        listDiv.innerHTML = "<i>No recovery points available.</i>";
+        listDiv.innerHTML = filterHTML + "<i>No recovery points available.</i>";
         return;
     }
 
-    listDiv.innerHTML = backups.map(b => `
+    listDiv.innerHTML = filterHTML + backups.map(b => `
         <div style="display:flex; justify-content:space-between; align-items:center; padding: 10px; border-bottom: 1px solid #ddd; background: white; margin-bottom: 5px; border-radius: 4px;">
             <div>
-                <span style="color:#d63031; font-weight:bold;">[${b.backup_type}]</span> 
+                <span style="color:${b.backup_type === 'Week' ? '#27ae60' : '#d63031'}; font-weight:bold;">[${b.backup_type}]</span> 
                 <b>${b.table_name}</b><br>
                 <small style="color:gray;">Saved: ${new Date(b.created_at).toLocaleString()}</small>
             </div>
@@ -389,8 +420,7 @@ async function loadBackups() {
         </div>
     `).join('');
 }
-
-loadBackups();
+window.loadBackups = loadBackups;
 
     async function checkAdminConflict(bookingId, bayId, mechId, targetTime) {
     const startTime = new Date(targetTime);
