@@ -310,23 +310,35 @@ async function loadDashboard() {
         `;
     }).join('');
 
-    // 4. Load Upcoming List (Confirmed only)
-    const { data: upcoming } = await supabase
+// 4. Load Upcoming List (Confirmed only)
+    const { data: upcoming, error: upcomingErr } = await supabase
         .from('bookings')
-        .select('*, bays(bay_name)')
+        .select('*') // Simplify this first to ensure data is flowing
         .eq('status', 'Confirmed')
         .order('scheduled_time', {ascending: true});
 
+    if (upcomingErr) {
+        console.error("Upcoming Bookings Fetch Error:", upcomingErr);
+    }
+
+    // Map through the bookings
     document.getElementById('booking-list').innerHTML = (upcoming && upcoming.length > 0) 
-        ? upcoming.map(b => `
-            <div style="background: white; border-left: 5px solid var(--primary); padding: 15px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
-                <div style="font-weight: bold; color: var(--dark);">${new Date(b.scheduled_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${new Date(b.scheduled_time).toLocaleDateString()}</div>
-                <div style="font-size: 0.9em;">${b.customer_name} (${b.plate_number})</div>
-                <div style="font-size: 0.8em; color: #888;">Bay: ${b.bays?.bay_name || 'N/A'}</div>
-            </div>
-        `).join('') 
+        ? upcoming.map(b => {
+            // Since we simplified the select, we find the bay name from our already loaded 'bays' array
+            const bayInfo = bays.find(bay => bay.id === b.bay_id);
+            
+            return `
+                <div style="background: white; border-left: 5px solid var(--primary); padding: 15px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                    <div style="font-weight: bold; color: var(--dark);">
+                        ${new Date(b.scheduled_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${new Date(b.scheduled_time).toLocaleDateString()}
+                    </div>
+                    <div style="font-size: 0.9em;">${b.customer_name} (${b.plate_number})</div>
+                    <div style="font-size: 0.8em; color: #888;">Bay: ${bayInfo ? bayInfo.bay_name : 'Loading...'}</div>
+                </div>
+            `;
+        }).join('') 
         : '<p style="color: gray;">No future bookings scheduled.</p>';
-}
+    }
 
 window.handleBayClick = async (id, status, bayName) => {
     if (!plate) return; // Only allow click if we have a customer "on hand"
