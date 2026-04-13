@@ -57,6 +57,13 @@
     color: #555;
     margin-bottom: 2px;
 }
+.booking-items {
+    margin-top: 5px;
+    padding-top: 5px;
+    border-top: 1px solid #eee;
+    font-size: 0.75em;
+    color: #777;
+}
     </style>
 </head>
 <body>
@@ -296,17 +303,46 @@ setInterval(() => {
 
 // --- UPDATED DASHBOARD LOADING ---
 async function loadDashboard() {
-    // 1. Fetch Bays, Mechanics, and ALL pending transaction details
+    // 1. Fetch Bays, Mechanics, Transactions, and Bookings
     const { data: bays, error: bayErr } = await supabase.from('bays').select('*').order('id');
     const { data: mechs, error: mechErr } = await supabase.from('mechanics').select('*').order('first_name');
     const { data: allItems, error: itemErr } = await supabase.from('transaction_details').select('*');
+    const { data: upcoming, error: upcomingErr } = await supabase
+        .from('bookings')
+        .select('*')
+        .eq('status', 'Confirmed')
+        .order('scheduled_time', {ascending: true});
     
-    if (bayErr || mechErr || itemErr) {
-        console.error("Fetch Error:", bayErr || mechErr || itemErr);
+    if (bayErr || mechErr || itemErr || upcomingErr) {
+        console.error("Fetch Error:", bayErr || mechErr || itemErr || upcomingErr);
         return;
     }
 
-    // 2. Render Mechanic Tags (remains the same)
+    // HELPER: Group items by name to prevent stacking
+    const getGroupedItemsHTML = (plateNum) => {
+        const items = allItems ? allItems.filter(item => item.plate_number === plateNum) : [];
+        if (items.length === 0) return '<p style="font-size:0.7em; color:gray; margin-top:5px;">No items added</p>';
+
+        // Reduce items into a map to sum quantities
+        const grouped = items.reduce((acc, item) => {
+            if (!acc[item.item_name]) {
+                acc[item.item_name] = { qty: 0, price: item.price };
+            }
+            acc[item.item_name].qty += item.qty;
+            return acc;
+        }, {});
+
+        return `<div class="item-list-display">
+            ${Object.keys(grouped).map(name => `
+                <div class="item-row">
+                    <span>${grouped[name].qty}x ${name}</span>
+                    <span>₱${grouped[name].price * grouped[name].qty}</span>
+                </div>
+            `).join('')}
+        </div>`;
+    };
+
+    // 2. Render Mechanic Tags
     document.getElementById('mechanic-list').innerHTML = mechs.map(m => `
         <div class="mech-tag ${m.status.toLowerCase().replace(' ', '-')}">
             <span class="status-dot"></span>
@@ -314,25 +350,11 @@ async function loadDashboard() {
         </div>
     `).join('');
 
-    // 3. Render Bay Cards with Item Display
+    // 3. Render Bay Cards (Active Jobs)
     document.getElementById('bay-grid').innerHTML = bays.map(bay => {
         const assignedMech = mechs.find(m => String(m.id) === String(bay.current_mechanic_id));
         const mechName = assignedMech ? `${assignedMech.first_name} ${assignedMech.last_name}` : "Assigning...";
         const isOccupied = bay.status === 'Occupied' || bay.current_plate !== null;
-
-        // FILTER ITEMS FOR THIS SPECIFIC BAY/PLATE
-        const bayItems = allItems ? allItems.filter(item => item.plate_number === bay.current_plate) : [];
-        
-        const itemsHTML = bayItems.length > 0 
-            ? `<div class="item-list-display">
-                ${bayItems.map(i => `
-                    <div class="item-row">
-                        <span>${i.qty}x ${i.item_name}</span>
-                        <span>₱${i.price}</span>
-                    </div>
-                `).join('')}
-               </div>`
-            : '<p style="font-size:0.7em; color:gray; margin-top:5px;">No items added yet</p>';
 
         return `
             <div class="bay-card ${isOccupied ? 'occupied' : 'available'}" onclick="handleBayClick(${bay.id}, '${bay.status}', '${bay.bay_name}')">
@@ -343,7 +365,7 @@ async function loadDashboard() {
                         <p><strong>👤 ${bay.current_customer || 'Unknown'}</strong></p>
                         <p style="font-size: 0.8em; color: #666;">🚗 ${bay.current_plate || 'No Plate'}</p>
                         <p style="font-size: 0.8em; color: var(--primary);">🔧 ${mechName}</p>
-                        ${itemsHTML}
+                        ${getGroupedItemsHTML(bay.current_plate)}
                     </div>
                     <button class="btn-finish" onclick="event.stopPropagation(); releaseBay(${bay.id})" style="margin-top:10px; background:#ff4d4d; color:white; border:none; padding:8px; border-radius:4px; width: 100%;">Finish Job</button>
                 ` : '<p style="color:#aaa; margin-top:20px;">Ready for Job</p>'}
@@ -351,30 +373,35 @@ async function loadDashboard() {
         `;
     }).join('');
 
-    // 4. Load Upcoming List (remains the same)
-    const { data: upcoming } = await supabase
-        .from('bookings')
-        .select('*')
-        .eq('status', 'Confirmed')
-        .order('scheduled_time', {ascending: true});
-
+    // 4. Render Upcoming Bookings with Transactions & Dates
     document.getElementById('booking-list').innerHTML = (upcoming && upcoming.length > 0) 
         ? upcoming.map(b => {
             const bayInfo = bays.find(bay => bay.id === b.bay_id);
             const mechInfo = mechs.find(m => String(m.id) === String(b.mechanic_id));
+            const dateObj = new Date(b.scheduled_time);
+            
+            // Format: "Monday, Oct 24"
+            const dayString = dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+            const timeString = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
             return `
                 <div style="background: white; border-left: 5px solid var(--primary); padding: 15px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
-                    <div style="font-weight: bold; color: var(--dark);">
-                        ${new Date(b.scheduled_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                    <div style="font-weight: bold; color: var(--dark); margin-bottom: 5px;">
+                        📅 ${dayString} @ ${timeString}
                     </div>
                     <div style="font-size: 0.9em;"><strong>${b.customer_name}</strong> (${b.plate_number})</div>
-                    <div style="font-size: 0.8em; color: #666;">📍 Bay: ${bayInfo ? bayInfo.bay_name : 'N/A'}</div>
+                    <div style="font-size: 0.8em; color: #666; margin: 4px 0;">
+                        📍 Bay: ${bayInfo ? bayInfo.bay_name : 'N/A'} | 🔧 Mech: ${mechInfo ? mechInfo.first_name : 'Assigning'}
+                    </div>
+                    <div class="booking-items">
+                        <strong>Items:</strong>
+                        ${getGroupedItemsHTML(b.plate_number)}
+                    </div>
                 </div>
             `;
         }).join('') 
         : '<p style="color: gray;">No future bookings scheduled.</p>';
 }
-
 window.handleBayClick = async (id, status, bayName) => {
     if (!plate) return; // Only allow click if we have a customer "on hand"
     
