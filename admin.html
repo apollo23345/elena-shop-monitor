@@ -353,6 +353,43 @@ window.syncOEMRef = (input, mode, id = null) => {
         hiddenEditInput.value = originalItem ? originalItem.oem_ref_id : "";
     }
 };
+
+// --- SEARCH FILTER FUNCTIONS ---
+
+window.filterMechanics = () => {
+    const query = document.getElementById('mech-search').value.toLowerCase();
+    const filtered = allMechanics.filter(m => 
+        m.first_name.toLowerCase().includes(query) || 
+        m.last_name.toLowerCase().includes(query)
+    );
+    renderMechanicsTable(filtered);
+};
+
+window.filterServices = () => {
+    const query = document.getElementById('srv-search').value.toLowerCase();
+    const filtered = allServices.filter(s => 
+        s.servicetype.toLowerCase().includes(query)
+    );
+    renderServicesTable(filtered);
+};
+
+window.filterInventory = () => {
+    const query = document.getElementById('inv-search').value.toLowerCase();
+    const filtered = allInventory.filter(i => 
+        i.item_name.toLowerCase().includes(query) || 
+        (i.oem_ref_id && i.oem_ref_id.toLowerCase().includes(query))
+    );
+    renderInventoryTable(filtered);
+};
+
+window.filterReceipts = () => {
+    const query = document.getElementById('receipt-search').value.toLowerCase();
+    const filtered = allReceipts.filter(r => 
+        r.customer_name.toLowerCase().includes(query) || 
+        (r.plate_number && r.plate_number.toLowerCase().includes(query))
+    );
+    renderReceiptsTable(filtered);
+};
 // Save function 
     window.saveService = async (id) => {
         const name = document.getElementById(`edit-srv-name-${id}`).value;
