@@ -190,15 +190,18 @@
 </div>
 <div id="tab-receipts" class="tab-content">
     <h3>Transaction History / Receipts</h3>
-    <div class="search-container">
-        <strong>Search Plate/Name:</strong>
-        <input type="text" id="receipt-search" placeholder="Enter Plate or Name..." onkeyup="filterReceipts()">
+    <div class="form-inline">
+        <input type="text" id="receipt-search-name" placeholder="Search Customer Name..." onkeyup="filterReceipts()">
+        <input type="text" id="receipt-search-plate" placeholder="Search Plate Number..." onkeyup="filterReceipts()">
+        <input type="date" id="receipt-search-date" onchange="filterReceipts()">
+        <button class="btn-del" onclick="resetReceiptFilters()" style="flex:0; min-width: 80px;">Reset</button>
     </div>
     <table id="table-receipts">
         <thead>
             <tr>
                 <th>Date</th>
-                <th>Customer / Plate</th>
+                <th>Customer Name</th>
+                <th>Plate Number</th>
                 <th>Total</th>
                 <th>Items Sold</th>
                 <th>Action</th>
@@ -394,15 +397,32 @@ window.filterInventory = () => {
 };
 
 window.filterReceipts = () => {
-    const query = document.getElementById('receipt-search').value.toLowerCase();
+    const nameQuery = document.getElementById('receipt-search-name').value.toLowerCase();
+    const plateQuery = document.getElementById('receipt-search-plate').value.toLowerCase();
+    const dateQuery = document.getElementById('receipt-search-date').value;
+
     const filtered = allReceipts.filter(r => {
-        const name = (r.customer_name || "").toLowerCase();
-        // Check for plate number - adjust key name if your table uses 'plate' or 'vehicle_plate'
-        const plate = (r.plate_number || "").toLowerCase(); 
+        const matchesName = (r.customer_name || "").toLowerCase().includes(nameQuery);
+        const matchesPlate = (r.plate_number || "").toLowerCase().includes(plateQuery);
         
-        return name.includes(query) || plate.includes(query);
+        // Date check (only filter if a date is actually picked)
+        let matchesDate = true;
+        if (dateQuery) {
+            const rowDate = new Date(r.created_at).toISOString().split('T')[0];
+            matchesDate = rowDate === dateQuery;
+        }
+
+        return matchesName && matchesPlate && matchesDate;
     });
+
     renderReceiptsTable(filtered);
+};
+
+window.resetReceiptFilters = () => {
+    document.getElementById('receipt-search-name').value = '';
+    document.getElementById('receipt-search-plate').value = '';
+    document.getElementById('receipt-search-date').value = '';
+    renderReceiptsTable(allReceipts);
 };
 
 // Save function 
@@ -481,23 +501,41 @@ window.saveInventory = async (id) => {
         `).join('');
     }
 
-    function renderReceiptsTable(data) {
-        const tbody = document.querySelector(`#table-receipts tbody`);
-        if (!tbody) return;
-        tbody.innerHTML = data.map(r => {
-            const date = new Date(r.created_at).toLocaleDateString();
-            const items = Array.isArray(r.items_json) ? r.items_json.map(i => i.item_name).join(', ') : 'No items';
-            return `
-                <tr>
-                    <td>${date}</td>
-                    <td><strong>${r.customer_name}</strong></td>
-                    <td>₱${parseFloat(r.total_amount || 0).toFixed(2)}</td>
-                    <td>${items}</td>
-                    <td><button class="btn-del" onclick="deleteItem('transactions', '${r.id}')">Del</button></td>
-                </tr>
-            `;
-        }).join('');
-    }
+function renderReceiptsTable(data) {
+    const tbody = document.querySelector(`#table-receipts tbody`);
+    if (!tbody) return;
+
+    tbody.innerHTML = data.map(r => {
+        const date = new Date(r.created_at).toLocaleString();
+        
+        // --- GROUPING LOGIC ---
+        // Takes the raw list and turns it into "Part Name x2"
+        let displayItems = 'No items';
+        if (Array.isArray(r.items_json)) {
+            const counts = r.items_json.reduce((acc, item) => {
+                acc[item.item_name] = (acc[item.item_name] || 0) + 1;
+                return acc;
+            }, {});
+
+            displayItems = Object.entries(counts)
+                .map(([name, qty]) => qty > 1 ? `${name} <b>x${qty}</b>` : name)
+                .join(', ');
+        }
+
+        return `
+            <tr>
+                <td><small>${date}</small></td>
+                <td><strong>${r.customer_name}</strong></td>
+                <td><span class="plate-badge">${r.plate_number}</span></td>
+                <td>₱${parseFloat(r.total_amount || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                <td>${displayItems}</td>
+                <td>
+                    <button class="btn-del" onclick="deleteItem('transactions', '${r.id}')">Del</button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
 
 function renderInventoryTable(dataToDisplay) {
     const tbody = document.querySelector(`#table-inventory tbody`);
