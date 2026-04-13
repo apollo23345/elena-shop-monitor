@@ -554,7 +554,7 @@ function renderReceiptsTable(data) {
 
     tbody.innerHTML = data.map(r => {
         const date = new Date(r.created_at).toLocaleString();
-        
+
         // --- GROUPING LOGIC ---
         // Takes the raw list and turns it into "Part Name x2"
         let displayItems = 'No items';
@@ -566,6 +566,7 @@ function renderReceiptsTable(data) {
 
             displayItems = Object.entries(counts)
                 .map(([name, qty]) => qty > 1 ? `${name} <b>x${qty}</b>` : name)
+                
                 .join(', ');
             
         }
@@ -575,7 +576,9 @@ function renderReceiptsTable(data) {
                 <td><small>${date}</small></td>
                 <td><strong>${r.customer_name}</strong></td>
                 <td><span class="plate-badge">${r.plate_number}</span></td>
+                
                 <td>₱${parseFloat(r.total_amount || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                
                 <td>${displayItems}</td>
                 <td>
                     <button class="btn-del" onclick="deleteItem('transactions', '${r.id}')">Del</button>
