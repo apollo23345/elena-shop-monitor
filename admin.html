@@ -377,15 +377,31 @@ const btn = document.getElementById(btnId);
     const qty = document.getElementById('inv-qty').value;
     const existingOem = document.getElementById('inv-oem-id').value;
     
-    // LOGIC: 
-    // 1. If 'existingOem' has a value (from your syncOEMRef function), use it.
-    // 2. If 'existingOem' is empty (blank box), create a new 9-digit number.
     let finalOem;
+
     if (existingOem && existingOem !== "") {
-        finalOem = parseInt(existingOem); // Ensure it's a number for the DB
+        // Use the one copied from the search (Cloning logic)
+        finalOem = parseInt(existingOem); 
     } else {
-        finalOem = Math.floor(100000000 + Math.random() * 900000000); 
+        // Generate a unique 4-digit number
+        let isUnique = false;
+        let attempts = 0;
+        
+        while (!isUnique && attempts < 100) {
+            const candidate = Math.floor(1000 + Math.random() * 9000);
+            // Check if this number exists in our local 'allInventory' list
+            const alreadyExists = allInventory.some(item => item.oem_ref_id == candidate);
+            
+            if (!alreadyExists) {
+                finalOem = candidate;
+                isUnique = true;
+            }
+            attempts++;
+        }
     }
+
+    // Safety fallback if the loop somehow fails
+    if (!finalOem) finalOem = Math.floor(1000 + Math.random() * 9000);
 
     const { error } = await supabase.from('inventory').insert([{ 
         item_name: name, 
@@ -397,7 +413,7 @@ const btn = document.getElementById(btnId);
     if (error) {
         alert("Database Error: " + error.message);
     } else {
-        alert("New Item Added! OEM ID: " + finalOem);
+        alert(`Success! Item "${name}" added with OEM ID: ${finalOem}`);
         // Reset fields
         document.getElementById('inv-name').value = '';
         document.getElementById('inv-price').value = '';
@@ -407,6 +423,7 @@ const btn = document.getElementById(btnId);
         loadData('inventory');
     }
 }
+
         else if (table === 'mechanics') {
     const first = document.getElementById('mech-first').value;
     const last = document.getElementById('mech-last').value;
