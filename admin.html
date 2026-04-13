@@ -241,12 +241,16 @@
     // --- CORE DATA LOADING ---
 async function loadData(table) {
     let targetTable = table;
+    
+    // Logic to map the Tab Name to the actual Supabase Table Name
     if (table === 'services') targetTable = 'service';
     if (table === 'receipts') targetTable = 'transactions';
+    // Ensure mechanics and inventory use their literal names
+    if (table === 'mechanics') targetTable = 'mechanics'; 
+    if (table === 'inventory') targetTable = 'inventory';
 
     const { data, error } = await supabase.from(targetTable).select('*');
     
-    // ADD THIS LINE TO DEBUG
     console.log(`Data for ${targetTable}:`, data, "Error:", error);
 
     if (error) {
@@ -254,12 +258,24 @@ async function loadData(table) {
         return;
     }
 
-
-        if (table === 'mechanics') { allMechanics = data; renderMechanicsTable(data); }
-        else if (table === 'services') { allServices = data; renderServicesTable(data); }
-        else if (table === 'inventory') { allInventory = data; renderInventoryTable(data); }
-        else if (table === 'receipts' || table === 'transactions') { allReceipts = data; renderReceiptsTable(data); }
+    // Route the data to the correct Render function
+    if (table === 'mechanics') { 
+        allMechanics = data; 
+        renderMechanicsTable(data); 
     }
+    else if (table === 'services' || table === 'service') { 
+        allServices = data; 
+        renderServicesTable(data); 
+    }
+    else if (table === 'inventory') { 
+        allInventory = data; 
+        renderInventoryTable(data); 
+    }
+    else if (table === 'receipts' || table === 'transactions') { 
+        allReceipts = data; 
+        renderReceiptsTable(data); 
+    }
+}
 
     // --- WINDOW EXPORTS (Crucial for onclick to work) ---
     window.showTab = (tabName) => {
@@ -287,7 +303,22 @@ async function loadData(table) {
             const qty = document.getElementById('inv-qty').value;
             const { error } = await supabase.from('inventory').insert([{ item_name: name, price: price, stock_quantity: qty }]);
             if (error) alert(error.message);
-        }
+           }         else if (table === 'mechanics') {
+    const first = document.getElementById('mech-first').value;
+    const last = document.getElementById('mech-last').value;
+    const contact = document.getElementById('mech-contact').value;
+    
+    const { error } = await supabase.from('mechanics').insert([
+        { first_name: first, last_name: last, contact: contact, status: 'Available' }
+    ]);
+    
+    if (error) alert(error.message);
+    // Clear inputs after adding
+    document.getElementById('mech-first').value = '';
+    document.getElementById('mech-last').value = '';
+    document.getElementById('mech-contact').value = '';
+}
+
         loadData(table);
     };
 
