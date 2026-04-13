@@ -1065,5 +1065,10 @@ function renderMechanicsTable(data) {
             </td>
         </tr>
     `).join('');
-}</script>
+}
+    window.logout = () => {
+        localStorage.removeItem('currentUser');
+        window.location.href = 'login.html';
+    };
+</script>
 </html>
