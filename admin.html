@@ -476,68 +476,81 @@ window.saveInventory = async (id) => {
     }
 };
 // delete function
+
 window.deleteItem = async (table, id) => {
     const targetTable = table === 'services' ? 'service' : table;
 
     if (targetTable === 'transactions') {
-        if (confirm("Are you sure you want to delete this receipt?")) {
-            const returnParts = confirm("Are the parts used being returned to inventory?");
+        if (!confirm("Are you sure you want to delete this receipt?")) return;
+        
+        const returnParts = confirm("Are the parts used being returned to inventory?");
 
-            if (returnParts) {
-                const transaction = allReceipts.find(r => r.id === id);
-                
-                if (transaction && Array.isArray(transaction.items_json)) {
-                    // 1. Filter only for "Part" items and group by their ID
-                    const partsToRestock = transaction.items_json.reduce((acc, item) => {
-                        if (item.item_type === 'Part' && item.id) {
-                            acc[item.id] = (acc[item.id] || 0) + 1;
-                        }
-                        return acc;
-                    }, {});
+        if (returnParts) {
+            // 1. Find the receipt in our local 'allReceipts' array
+            const transaction = allReceipts.find(r => r.id == id);
+            
+            // 2. Ensure we have the items list
+            let items = transaction.items_json;
+            if (typeof items === 'string') items = JSON.parse(items);
 
-                    // 2. Loop through the parts and update Supabase
-                    for (const [partId, qty] of Object.entries(partsToRestock)) {
-                        // Get current stock first
-                        const { data: invItem } = await supabase
+            if (Array.isArray(items)) {
+                console.log("Starting inventory restock scan...");
+
+                for (const item of items) {
+                    // 3. Only restock if it's a Part (ignore Labor/Services)
+                    if (item.item_type === 'Part') {
+                        const partName = item.item_name;
+
+                        // 4. Find the item in INVENTORY by NAME instead of ID
+                        const { data: invItem, error: fetchError } = await supabase
                             .from('inventory')
-                            .select('stock_quantity')
-                            .eq('id', partId)
+                            .select('id, stock_quantity')
+                            .eq('item_name', partName)
                             .maybeSingle();
 
                         if (invItem) {
-                            const newQty = (invItem.stock_quantity || 0) + qty;
+                            const newQty = (invItem.stock_quantity || 0) + 1;
+                            
+                            // 5. Update the inventory with the new count
                             await supabase
                                 .from('inventory')
                                 .update({ stock_quantity: newQty })
-                                .eq('id', partId);
-                            console.log(`Restocked ID ${partId}: +${qty}`);
+                                .eq('id', invItem.id);
+                            
+                            console.log(`Restocked: ${partName} (+1)`);
+                        } else {
+                            console.warn(`Restock failed for: ${partName} (Not found in inventory)`);
                         }
                     }
-                    alert("Inventory restocked successfully.");
                 }
+                alert("Inventory check complete. Quantities updated where matches were found.");
             }
-
-            // 3. Delete the actual transaction record
-            const { error } = await supabase.from('transactions').delete().eq('id', id);
-            if (error) {
-                alert("Error deleting receipt: " + error.message);
-            } else {
-                alert("Receipt deleted.");
-            }
-            
-            // Refresh tables
-            loadData('receipts');
-            loadData('inventory');
         }
+
+        // 6. Delete the actual transaction record
+        const { error: delError } = await supabase.from('transactions').delete().eq('id', id);
+        
+        if (delError) {
+            alert("Error deleting receipt: " + delError.message);
+        } else {
+            alert("Receipt deleted.");
+        }
+        
+        // Refresh the tables to show new stock and updated receipt list
+        loadData('receipts');
+        loadData('inventory');
+
     } else {
-        // Standard delete for Mechanics, Services, or Inventory rows
+        // Standard delete for Mechanics or Services
         if (confirm("Are you sure you want to delete this record?")) {
             const { error } = await supabase.from(targetTable).delete().eq('id', id);
             if (error) alert(error.message);
             loadData(table);
         }
     }
-};    // --- RENDER FUNCTIONS ---
+};
+
+// --- RENDER FUNCTIONS ---
     function renderServicesTable(data) {
         const tbody = document.querySelector(`#table-services tbody`);
         if (!tbody) return;
