@@ -517,29 +517,38 @@ window.resetReceiptFilters = () => {
     renderReceiptsTable(allReceipts);
 };
 
-// Save function 
+// --- UPDATED SAVE FUNCTION ---
 window.saveBooking = async (id) => {
     const bayId = document.getElementById(`edit-bk-bay-${id}`).value;
     const mechId = document.getElementById(`edit-bk-mech-${id}`).value;
     const rawTime = document.getElementById(`edit-bk-time-${id}`).value;
-    const status = document.getElementById(`edit-bk-status-${id}`).value; // Add this line
 
     if (!rawTime) return alert("Please select a valid time.");
+    
+    // Check for conflicts before saving
+    const hasConflict = await checkAdminConflict(id, bayId, mechId, rawTime);
+    if (hasConflict) {
+        if (!confirm("Conflict detected: This Mechanic or Bay is busy within 45 mins of this time. Save anyway?")) {
+            return;
+        }
+    }
+
     const isoTime = new Date(rawTime).toISOString();
 
     const { error } = await supabase.from('bookings').update({
         bay_id: bayId,
         mechanic_id: mechId,
-        scheduled_time: isoTime,
-        status: status // Add this line
+        scheduled_time: isoTime
     }).eq('id', id);
 
-    if (error) alert(error.message);
-    else {
-        alert("Booking updated successfully!");
+    if (error) {
+        alert("Update failed: " + error.message);
+    } else {
+        alert("Booking rescheduled successfully!");
         loadData('bookings');
     }
 };
+
 
 window.deleteBooking = async (id) => {
     if (!confirm("Delete this booking? This cannot be undone.")) return;
@@ -677,52 +686,64 @@ function renderBookingsTable(data) {
     const tbody = document.querySelector(`#table-bookings tbody`);
     if (!tbody) return;
 
-    const filteredData = data.filter(b => b.status === 'Active' || b.status === 'Confirmed' || b.status === 'Completed');
+    // We show Active, Confirmed, and Completed
+    const filteredData = data.filter(b => ['Active', 'Confirmed', 'Completed'].includes(b.status));
 
     tbody.innerHTML = filteredData.map(b => {
-        // 1. Find items bought for THIS booking ID
+        // Find items associated with this booking
         const itemsForBooking = allTransactionDetails.filter(item => item.booking_id === b.id);
         
-        // 2. Format the items list (e.g., "Toyota Tire, Oil Change")
         const itemsList = itemsForBooking.length > 0 
             ? itemsForBooking.map(i => i.item_name).join(', ') 
-            : '<span style="color:#999; font-style:italic;">No items added</span>';
+            : '<span style="color:#999; font-style:italic;">None</span>';
 
+        // Format time for the datetime-local input
         const localTime = new Date(b.scheduled_time).toLocaleString('sv-SE', { 
             year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' 
         }).replace(' ', 'T');
 
+        // Check if completed - if so, we might want to disable editing entirely
+        const isCompleted = b.status === 'Completed';
+
         return `
             <tr>
-                <td><strong>${b.customer_name}</strong><br><small>${b.plate_number}</small></td>
                 <td>
-                    <select id="edit-bk-bay-${b.id}" class="edit-input">
+                    <strong>${b.customer_name}</strong><br>
+                    <small class="plate-badge">${b.plate_number}</small>
+                </td>
+                <td>
+                    <select id="edit-bk-bay-${b.id}" class="edit-input" ${isCompleted ? 'disabled' : ''}>
                         ${allBays.map(bay => `<option value="${bay.id}" ${bay.id == b.bay_id ? 'selected' : ''}>${bay.bay_name}</option>`).join('')}
                     </select>
                 </td>
                 <td>
-                    <select id="edit-bk-mech-${b.id}" class="edit-input">
+                    <select id="edit-bk-mech-${b.id}" class="edit-input" ${isCompleted ? 'disabled' : ''}>
                         ${allMechanics.map(m => `<option value="${m.id}" ${m.id == b.mechanic_id ? 'selected' : ''}>${m.first_name} ${m.last_name}</option>`).join('')}
                     </select>
                 </td>
-                <td><input type="datetime-local" class="edit-input" id="edit-bk-time-${b.id}" value="${localTime}"></td>
+                <td>
+                    <input type="datetime-local" class="edit-input" id="edit-bk-time-${b.id}" value="${localTime}" ${isCompleted ? 'disabled' : ''}>
+                </td>
                 
-                <td><small>${itemsList}</small></td> 
+                <td style="max-width: 200px;"><small>${itemsList}</small></td> 
                 
                 <td>
                     <span class="status-badge ${b.status.toLowerCase()}">
-                        <strong>${b.status}</strong>
+                        ${b.status}
                     </span>
                 </td>
                 <td>
-                    <button class="btn-save" onclick="saveBooking('${b.id}')">Update</button>
-                    <button class="btn-del" onclick="deleteBooking('${b.id}')">Delete</button>
+                    ${!isCompleted ? `
+                        <button class="btn-save" onclick="saveBooking('${b.id}')">Update</button>
+                        <button class="btn-del" onclick="deleteBooking('${b.id}')">Cancel</button>
+                    ` : `<small>Locked</small>`}
                 </td>
             </tr>
         `;
     }).join('');
 }
-    function renderServicesTable(data) {
+
+function renderServicesTable(data) {
         const tbody = document.querySelector(`#table-services tbody`);
         if (!tbody) return;
         tbody.innerHTML = data.map(s => `
