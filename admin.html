@@ -101,7 +101,7 @@
         <button onclick="location.href='new-customer.html'">New Customer</button>
         <button onclick="location.href='service-booking.html'">Service Booking</button>
         <button onclick="location.href='checkout.html'">Check Out</button>
-        <button class="active" id="admin-nav-btn" onclick="location.href='admin.html'">Admin Control</button>
+        <button id="admin-nav" class="active" onclick="location.href='admin.html'">Admin Control</button>
     </nav>
 
 <div class="admin-nav">
@@ -258,22 +258,30 @@
     let allTransactionDetails = []; // Add this to your Data Storage variables
 
     // Security & Init
-    document.addEventListener('DOMContentLoaded', () => {
-        const user = JSON.parse(localStorage.getItem('currentUser'));
-        if (!user || user.manager_id !== null) {
-            alert("Access Denied: Admins Only");
-            window.location.href = 'dashboard.html';
-        } else {
-            document.getElementById('display-user-name').innerText = user.first_name + " " + user.last_name + " (Admin)";
-            // Load ALL data on startup so tables aren't empty
-            loadData('mechanics');
-            loadData('service');
-            loadData('inventory');
-            loadData('receipts');
-            loadData('bookings');
-            loadData('bays');
-        }
-    });
+document.addEventListener('DOMContentLoaded', () => {
+    const user = JSON.parse(localStorage.getItem('currentUser'));
+
+    // 1. SECURITY CHECK: Kick out non-admins
+    if (!user || user.manager_id !== null) {
+        alert("Access Denied: Admins Only");
+        window.location.href = 'dashboard.html';
+        return; // Stop running the rest of the script
+    }
+
+    // 2. HEADER DISPLAY
+    const nameDisplay = document.getElementById('display-user-name');
+    if(nameDisplay) {
+        nameDisplay.innerText = user.first_name + " " + user.last_name + " (Admin)";
+    }
+
+    // 3. LOAD ADMIN TABLES
+    loadData('mechanics');
+    loadData('service');
+    loadData('inventory');
+    loadData('receipts');
+    loadData('bookings');
+    loadData('bays');
+});
 
     async function checkAdminConflict(bookingId, bayId, mechId, targetTime) {
     const startTime = new Date(targetTime);

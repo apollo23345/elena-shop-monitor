@@ -82,7 +82,7 @@
         <button onclick="location.href='new-customer.html'">New Customer</button>
         <button class="active" onclick="location.href='service-booking.html'">Service Booking</button>
         <button onclick="location.href='checkout.html'">Check Out</button>
-        <button id="admin-nav" class="admin-only" onclick="location.href='admin.html'">Admin Control</button>
+        <button id="admin-nav" onclick="location.href='admin.html'" style="display:none;">Admin Control</button>
     </nav>
 
     <div class="container">
@@ -124,21 +124,43 @@
     const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlycXRuYXhuc2hra2l6cmFkdHNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3ODY5NTMsImV4cCI6MjA5MTM2Mjk1M30.dBveYrCJ24XIkyx6rc-iVaYkdOBGgsa-wuCV2shr1cY'
     const supabase = createClient(supabaseUrl, supabaseKey)
 
-    const user = JSON.parse(localStorage.getItem('currentUser'));
-    if (!user) {
-        window.location.href = 'login.html';
-    } else {
-        document.getElementById('display-user-name').innerText = user.first_name + " " + user.last_name;
-        if (user.manager_id === null) {
-            const adminNav = document.getElementById('admin-nav');
-            if(adminNav) adminNav.style.display = 'block';
+// --- IDENTITY & PROTECTION GATEKEEPER ---
+const user = JSON.parse(localStorage.getItem('currentUser'));
+
+// 1. Kick out anyone not logged in
+if (!user) {
+    window.location.href = 'login.html';
+} else {
+    // 2. Display the name in the header
+    const nameDisplay = document.getElementById('display-user-name');
+    if(nameDisplay) nameDisplay.innerText = `${user.first_name} ${user.last_name}`;
+
+    // 3. THE ADMIN BUTTON LOGIC
+    // If manager_id exists, they are STAFF (hide/disable admin button)
+    // If manager_id is null, they are ADMIN (show admin button)
+    const adminBtn = document.getElementById('admin-nav');
+    if (adminBtn) {
+        if (user.manager_id !== null) {
+            // Option A: Hide it completely (Best for staff)
+            adminBtn.style.display = 'none'; 
+            
+            // SECURITY: If a staff member tries to manually type "admin.html" in the URL
+            if (window.location.pathname.includes('admin.html')) {
+                alert("Access Denied: Admins Only");
+                window.location.href = 'dashboard.html';
+            }
+        } else {
+            // It's an admin, make sure it's visible
+            adminBtn.style.display = 'block';
         }
     }
+}
 
-    window.logout = () => {
-        localStorage.removeItem('currentUser');
-        window.location.href = 'login.html';
-    };
+// 4. Logout Function
+window.logout = () => {
+    localStorage.removeItem('currentUser');
+    window.location.href = 'login.html';
+};
 
     const urlParams = new URLSearchParams(window.location.search);
     const plate = urlParams.get('plate');
