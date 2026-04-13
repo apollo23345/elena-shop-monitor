@@ -437,7 +437,7 @@ window.releaseBay = async (id) => {
     
     if(!confirm("Are you sure this job is finished? This will also clear the booking schedule.")) return;
 
-    // 1. Get the data BEFORE we clear it so we know which plate to look for in bookings
+    // 1. Get the data BEFORE we clear it
     const { data: bay } = await supabase.from('bays').select('*').eq('id', id).single();
     if (!bay) return;
 
@@ -454,12 +454,12 @@ window.releaseBay = async (id) => {
         await supabase.from('mechanics').update({ status: 'Available' }).eq('id', bay.current_mechanic_id);
     }
 
-    // --- NEW: DELETE THE BOOKING TO CLEAR CONFLICTS ---
-    // We delete where the plate matches and the status is 'Active' 
+    // --- UPDATED: DELETE BOOKINGS FOR THIS SPECIFIC JOB ---
+    // This ensures that even if the status was still 'Confirmed', it gets removed upon finishing
     await supabase.from('bookings')
         .delete()
         .eq('plate_number', bay.current_plate)
-        .eq('status', 'Active');
+        .eq('bay_id', id);
     
     // 4. Navigate to checkout
     window.location.href = `checkout.html?plate=${bay.current_plate}&name=${encodeURIComponent(bay.current_customer)}`;
