@@ -329,36 +329,61 @@ const getGroupedItemsHTML = (bookingId) => {
         `).join('')}
     </div>`;
 };
+document.getElementById('mechanic-list').innerHTML = mechs.map(m => `
+    <div class="mech-tag ${m.status.toLowerCase()}">
+        <span class="status-dot"></span>
+        <strong>${m.first_name} ${m.last_name}</strong>
+        <span style="font-size: 0.8em; color: #666;">(${m.status})</span>
+    </div>
+`).join('');
 
-    // Render Bays
-    document.getElementById('bay-grid').innerHTML = bays.map(bay => {
-        const isOccupied = bay.status === 'Occupied';
-        const activeB = activeBookings ? activeBookings.find(b => b.bay_id === bay.id && b.plate_number === bay.current_plate) : null;
-        
-        return `
-            <div class="bay-card ${isOccupied ? 'occupied' : 'available'}" onclick="handleBayClick(${bay.id}, '${bay.status}', '${bay.bay_name}')">
-                <div class="sticker">${isOccupied ? 'OCCUPIED' : 'AVAILABLE'}</div>
-                <h2>${bay.bay_name}</h2>
-                ${isOccupied ? `
-                    <div style="text-align: left; background: #f9f9f9; padding: 10px; border-radius: 8px;">
-                        <p><strong>👤 ${bay.current_customer}</strong></p>
-                        <p style="font-size: 0.8em; color: #666;">🚗 ${bay.current_plate}</p>
-                        ${getGroupedItemsHTML(activeB?.id)} 
-                    </div>
-                    <button class="btn-finish" onclick="event.stopPropagation(); releaseBay(${bay.id})">Finish Job</button>
-                ` : '<p>Ready</p>'}
-            </div>`;
-    }).join('');
+// Render Bays
 
-    // Render Upcoming
-    document.getElementById('booking-list').innerHTML = upcoming.map(b => `
-        <div style="background: white; border-left: 5px solid var(--primary); padding: 15px; border-radius: 6px;">
-            <strong>${new Date(b.scheduled_time).toLocaleDateString()} @ ${new Date(b.scheduled_time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</strong>
-            <div>${b.customer_name} (${b.plate_number})</div>
+document.getElementById('bay-grid').innerHTML = bays.map(bay => {
+    const isOccupied = bay.status === 'Occupied';
+    const activeB = activeBookings ? activeBookings.find(b => b.bay_id === bay.id && b.plate_number === bay.current_plate) : null;
+    
+    // Find the mechanic name from the mechs array
+    const assignedMech = mechs.find(m => m.id === bay.current_mechanic_id);
+    const mechName = assignedMech ? `${assignedMech.first_name} ${assignedMech.last_name}` : "Unknown Mechanic";
+
+    return `
+        <div class="bay-card ${isOccupied ? 'occupied' : 'available'}" onclick="handleBayClick(${bay.id}, '${bay.status}', '${bay.bay_name}')">
+            <div class="sticker">${isOccupied ? 'OCCUPIED' : 'AVAILABLE'}</div>
+            <h2>${bay.bay_name}</h2>
+            ${isOccupied ? `
+                <div style="text-align: left; background: #f9f9f9; padding: 10px; border-radius: 8px;">
+                    <p><strong>👤 ${bay.current_customer}</strong></p>
+                    <p style="font-size: 0.8em; color: #666;">🚗 ${bay.current_plate}</p>
+                    <p style="font-size: 0.8em; color: var(--primary); margin-top:5px;">🛠️ <b>Mech: ${mechName}</b></p>
+                    ${getGroupedItemsHTML(activeB?.id)} 
+                </div>
+                <button class="btn-finish" onclick="event.stopPropagation(); releaseBay(${bay.id})">Finish Job</button>
+            ` : '<p>Ready</p>'}
+        </div>`;
+}).join('');
+
+// Render Upcoming
+document.getElementById('booking-list').innerHTML = upcoming.map(b => {
+    // Find the mechanic for this booking
+    const m = mechs.find(mech => mech.id === b.mechanic_id);
+    const mechName = m ? `${m.first_name} ${m.last_name}` : "TBD";
+
+    return `
+        <div style="background: white; border-left: 5px solid var(--primary); padding: 15px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                <strong>${new Date(b.scheduled_time).toLocaleDateString()} @ ${new Date(b.scheduled_time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</strong>
+                <span style="font-size:0.75em; background:#eee; padding:2px 6px; border-radius:4px;">${b.bay_id ? 'Bay ' + b.bay_id : 'No Bay'}</span>
+            </div>
+            <div style="margin-top:5px;">${b.customer_name} (${b.plate_number})</div>
+            <div style="font-size: 0.85em; color: var(--primary); margin-top:3px;">👨‍🔧 Mechanic: ${mechName}</div>
             ${getGroupedItemsHTML(b.id)}
         </div>
-    `).join('');
-}window.handleBayClick = async (id, status, bayName) => {
+    `;
+}).join('');
+}
+
+window.handleBayClick = async (id, status, bayName) => {
     if (!plate) return; // Only allow click if we have a customer "on hand"
     
     selectedBayId = id;
