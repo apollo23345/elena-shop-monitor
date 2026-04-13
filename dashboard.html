@@ -311,33 +311,30 @@ async function loadDashboard() {
     }).join('');
 
 // 4. Load Upcoming List (Confirmed only)
-    const { data: upcoming, error: upcomingErr } = await supabase
-        .from('bookings')
-        .select('*') // Simplify this first to ensure data is flowing
-        .eq('status', 'Confirmed')
-        .order('scheduled_time', {ascending: true});
+const { data: upcoming, error: upcomingErr } = await supabase
+    .from('bookings')
+    .select('*')
+    .eq('status', 'Confirmed')
+    .order('scheduled_time', {ascending: true});
 
-    if (upcomingErr) {
-        console.error("Upcoming Bookings Fetch Error:", upcomingErr);
-    }
-
-    // Map through the bookings
-    document.getElementById('booking-list').innerHTML = (upcoming && upcoming.length > 0) 
-        ? upcoming.map(b => {
-            // Since we simplified the select, we find the bay name from our already loaded 'bays' array
-            const bayInfo = bays.find(bay => bay.id === b.bay_id);
-            
-            return `
-                <div style="background: white; border-left: 5px solid var(--primary); padding: 15px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
-                    <div style="font-weight: bold; color: var(--dark);">
-                        ${new Date(b.scheduled_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${new Date(b.scheduled_time).toLocaleDateString()}
-                    </div>
-                    <div style="font-size: 0.9em;">${b.customer_name} (${b.plate_number})</div>
-                    <div style="font-size: 0.8em; color: #888;">Bay: ${bayInfo ? bayInfo.bay_name : 'Loading...'}</div>
+document.getElementById('booking-list').innerHTML = (upcoming && upcoming.length > 0) 
+    ? upcoming.map(b => {
+        const bayInfo = bays.find(bay => bay.id === b.bay_id);
+        // Find the mechanic name from the mechs array loaded at the top of the function
+        const mechInfo = mechs.find(m => String(m.id) === String(b.mechanic_id));
+        
+        return `
+            <div style="background: white; border-left: 5px solid var(--primary); padding: 15px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                <div style="font-weight: bold; color: var(--dark);">
+                    ${new Date(b.scheduled_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${new Date(b.scheduled_time).toLocaleDateString()}
                 </div>
-            `;
-        }).join('') 
-        : '<p style="color: gray;">No future bookings scheduled.</p>';
+                <div style="font-size: 0.9em;"><strong>${b.customer_name}</strong> (${b.plate_number})</div>
+                <div style="font-size: 0.8em; color: #666;">📍 Bay: ${bayInfo ? bayInfo.bay_name : 'N/A'}</div>
+                <div style="font-size: 0.8em; color: var(--primary);">🔧 Mech: ${mechInfo ? mechInfo.first_name : 'Assigned'}</div>
+            </div>
+        `;
+    }).join('') 
+    : '<p style="color: gray;">No future bookings scheduled.</p>';
     }
 
 window.handleBayClick = async (id, status, bayName) => {
@@ -441,9 +438,9 @@ window.releaseBay = async (id) => {
         return;
     }
     
-    if(!confirm("Are you sure this job is finished?")) return;
+    if(!confirm("Are you sure this job is finished? This will also clear the booking schedule.")) return;
 
-    // 1. Get the data BEFORE we clear it
+    // 1. Get the data BEFORE we clear it so we know which plate to look for in bookings
     const { data: bay } = await supabase.from('bays').select('*').eq('id', id).single();
     if (!bay) return;
 
@@ -459,8 +456,15 @@ window.releaseBay = async (id) => {
     if (bay.current_mechanic_id) {
         await supabase.from('mechanics').update({ status: 'Available' }).eq('id', bay.current_mechanic_id);
     }
+
+    // --- NEW: DELETE THE BOOKING TO CLEAR CONFLICTS ---
+    // We delete where the plate matches and the status is 'Active' 
+    await supabase.from('bookings')
+        .delete()
+        .eq('plate_number', bay.current_plate)
+        .eq('status', 'Active');
     
-    // 4. Navigate using the data we saved in step 1
+    // 4. Navigate to checkout
     window.location.href = `checkout.html?plate=${bay.current_plate}&name=${encodeURIComponent(bay.current_customer)}`;
 };
 
