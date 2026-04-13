@@ -377,8 +377,9 @@ const btn = document.getElementById(btnId);
     const qty = document.getElementById('inv-qty').value;
     const existingOem = document.getElementById('inv-oem-id').value;
     
-    // If no alternative was selected, create a unique OEM ID (e.g., PART-12345)
-    const finalOem = existingOem || "OEM-" + Date.now();
+    // FIX: If the box is empty, create a unique ID. 
+    // If they used the 'Alternative' search, it uses that instead.
+    const finalOem = existingOem || "OEM-" + Math.random().toString(36).substr(2, 9).toUpperCase();
 
     const { error } = await supabase.from('inventory').insert([{ 
         item_name: name, 
@@ -387,14 +388,19 @@ const btn = document.getElementById(btnId);
         oem_ref_id: finalOem 
     }]);
     
-    if (error) alert(error.message);
-    // Reset fields
-    document.getElementById('inv-name').value = '';
-    document.getElementById('inv-price').value = '';
-    document.getElementById('inv-qty').value = '';
-    document.getElementById('inv-alt-search').value = '';
-    document.getElementById('inv-oem-id').value = '';
-           }         else if (table === 'mechanics') {
+    if (error) {
+        alert(error.message);
+    } else {
+        // Reset fields
+        document.getElementById('inv-name').value = '';
+        document.getElementById('inv-price').value = '';
+        document.getElementById('inv-qty').value = '';
+        document.getElementById('inv-alt-search').value = '';
+        document.getElementById('inv-oem-id').value = '';
+        loadData('inventory');
+    }
+}
+        else if (table === 'mechanics') {
     const first = document.getElementById('mech-first').value;
     const last = document.getElementById('mech-last').value;
     const contact = document.getElementById('mech-contact').value;
