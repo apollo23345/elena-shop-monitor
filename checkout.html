@@ -179,32 +179,34 @@ function renderTable(items) {
         
         document.getElementById('grand-total').innerText = grandTotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
     }
-    window.saveAndFinish = async () => {
-        const total = document.getElementById('grand-total').innerText;
-        const customerName = document.getElementById('res-name').innerText;
-        const resPlate = document.getElementById('res-plate').innerText;
-        
-        if (currentItems.length === 0) {
-            alert("No items to save!");
-            return;
-        }
+window.saveAndFinish = async () => {
+    // Get the text and remove all commas before converting to a number
+    const totalText = document.getElementById('grand-total').innerText;
+    const cleanTotal = totalText.replace(/,/g, ''); // Removes commas
+    
+    const customerName = document.getElementById('res-name').innerText;
+    const resPlate = document.getElementById('res-plate').innerText;
+    
+    if (currentItems.length === 0) {
+        alert("No items to save!");
+        return;
+    }
 
-        const { error } = await supabase.from('transactions').insert([{
-            customer_name: customerName,
-            plate_number: resPlate,
-            total_amount: parseFloat(total),
-            items_json: currentItems 
-        }]);
+    const { error } = await supabase.from('transactions').insert([{
+        customer_name: customerName,
+        plate_number: resPlate,
+        total_amount: parseFloat(cleanTotal), // Now correctly parses 1000.00
+        items_json: currentItems 
+    }]);
 
-        if (!error) {
-            await supabase.from('transaction_details').delete().eq('plate_number', resPlate);
-            alert("Transaction Saved Successfully!");
-            window.location.href = 'dashboard.html';
-        } else {
-            alert("Error saving: " + error.message);
-        }
-    };
-
+    if (!error) {
+        await supabase.from('transaction_details').delete().eq('plate_number', resPlate);
+        alert("Transaction Saved Successfully!");
+        window.location.href = 'dashboard.html';
+    } else {
+        alert("Error saving: " + error.message);
+    }
+};
     window.lookupPastTransaction = async () => {
         const searchPlate = document.getElementById('search-plate').value.trim().toUpperCase();
         if (!searchPlate) return;
