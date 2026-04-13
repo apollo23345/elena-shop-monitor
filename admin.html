@@ -567,6 +567,8 @@ function renderReceiptsTable(data) {
             displayItems = Object.entries(counts)
                 .map(([name, qty]) => qty > 1 ? `${name} <b>x${qty}</b>` : name)
                 .join(', ');
+            // Inside your Admin script render function
+<td>₱${parseFloat(r.total_amount || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
         }
 
         return `
