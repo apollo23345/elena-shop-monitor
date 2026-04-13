@@ -304,13 +304,21 @@ setInterval(() => {
 
 // --- UPDATED DASHBOARD LOADING ---
 async function loadDashboard() {
+    // 1. CLEAR IMMEDIATELY (Before fetching any data)
+    const bayGrid = document.getElementById('bay-grid');
+    const mechList = document.getElementById('mechanic-list');
+    const bookingList = document.getElementById('booking-list');
+    
+    if (bayGrid) bayGrid.innerHTML = '';
+    if (mechList) mechList.innerHTML = '';
+    if (bookingList) bookingList.innerHTML = '';
+
+    // 2. NOW fetch the data
     const { data: bays } = await supabase.from('bays').select('*').order('id');
     const { data: mechs } = await supabase.from('mechanics').select('*');
     const { data: allItems } = await supabase.from('transaction_details').select('*');
-    // Fetch bookings to get the IDs for active bay items
     const { data: activeBookings } = await supabase.from('bookings').select('*').eq('status', 'Active');
-    const { data: upcoming } = await supabase.from('bookings').select('*').eq('status', 'Confirmed').order('scheduled_time');
-// --- ADD THESE LINES TO CLEAR OLD DATA ---
+    const { data: upcoming } = await supabase.from('bookings').select('*').eq('status', 'Confirmed').order('scheduled_time');// --- ADD THESE LINES TO CLEAR OLD DATA ---
     document.getElementById('bay-grid').innerHTML = '';
     document.getElementById('mechanic-list').innerHTML = '';
     document.getElementById('booking-list').innerHTML = '';
