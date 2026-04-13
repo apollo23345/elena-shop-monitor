@@ -269,10 +269,16 @@ setInterval(() => {
 
 // --- UPDATED DASHBOARD LOADING ---
 async function loadDashboard() {
-    const { data: bays } = await supabase.from('bays').select('*').order('id');
-    const { data: mechs } = await supabase.from('mechanics').select('*').order('first_name');
+    // 1. Fetch data
+    const { data: bays, error: bayErr } = await supabase.from('bays').select('*').order('id');
+    const { data: mechs, error: mechErr } = await supabase.from('mechanics').select('*').order('first_name');
     
-    // Render Mechanic Tags
+    if (bayErr || mechErr) {
+        console.error("Fetch Error:", bayErr || mechErr);
+        return;
+    }
+
+    // 2. Render Mechanic Tags
     document.getElementById('mechanic-list').innerHTML = mechs.map(m => `
         <div class="mech-tag ${m.status.toLowerCase().replace(' ', '-')}">
             <span class="status-dot"></span>
@@ -280,19 +286,22 @@ async function loadDashboard() {
         </div>
     `).join('');
 
-    // Render Bay Cards
+    // 3. Render Bay Cards
     document.getElementById('bay-grid').innerHTML = bays.map(bay => {
-        const assignedMech = mechs.find(m => m.id == bay.current_mechanic_id);
-        const mechName = assignedMech ? `${assignedMech.first_name} ${assignedMech.last_name}` : "Unassigned";
+        // Use == to allow string-to-number comparison
+        const assignedMech = mechs.find(m => String(m.id) === String(bay.current_mechanic_id));
+        const mechName = assignedMech ? `${assignedMech.first_name} ${assignedMech.last_name}` : "Mechanic Assigned";
+
+        const isOccupied = bay.status === 'Occupied' || bay.current_plate !== null;
 
         return `
-            <div class="bay-card ${bay.status.toLowerCase()}" onclick="handleBayClick(${bay.id}, '${bay.status}', '${bay.bay_name}')">
-                <div class="sticker">${bay.status.toUpperCase()}</div>
+            <div class="bay-card ${isOccupied ? 'occupied' : 'available'}" onclick="handleBayClick(${bay.id}, '${bay.status}', '${bay.bay_name}')">
+                <div class="sticker">${isOccupied ? 'OCCUPIED' : 'AVAILABLE'}</div>
                 <h2>${bay.bay_name}</h2>
-                ${bay.status === 'Occupied' ? `
+                ${isOccupied ? `
                     <div style="background: #f9f9f9; padding: 10px; border-radius: 8px; text-align: left;">
-                        <p><strong>👤 ${bay.current_customer}</strong></p>
-                        <p style="font-size: 0.8em; color: #666;">🚗 ${bay.current_plate}</p>
+                        <p><strong>👤 ${bay.current_customer || 'Unknown'}</strong></p>
+                        <p style="font-size: 0.8em; color: #666;">🚗 ${bay.current_plate || 'No Plate'}</p>
                         <p style="font-size: 0.8em; color: var(--primary);">🔧 ${mechName}</p>
                     </div>
                     <button class="btn-finish" onclick="event.stopPropagation(); releaseBay(${bay.id})" style="margin-top:10px; background:#ff4d4d; color:white; border:none; padding:8px; border-radius:4px; width: 100%;">Finish Job</button>
@@ -301,15 +310,22 @@ async function loadDashboard() {
         `;
     }).join('');
 
-    // Load Upcoming List
-    const { data: upcoming } = await supabase.from('bookings').select('*, bays(bay_name)').eq('status', 'Confirmed').order('scheduled_time', {ascending: true});
-    document.getElementById('booking-list').innerHTML = (upcoming || []).map(b => `
-        <div style="background: white; border-left: 5px solid var(--primary); padding: 15px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
-            <div style="font-weight: bold; color: var(--dark);">${new Date(b.scheduled_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${new Date(b.scheduled_time).toLocaleDateString()}</div>
-            <div style="font-size: 0.9em;">${b.customer_name} (${b.plate_number})</div>
-            <div style="font-size: 0.8em; color: #888;">Bay: ${b.bays?.bay_name || 'N/A'}</div>
-        </div>
-    `).join('') || '<p style="color: gray;">No future bookings scheduled.</p>';
+    // 4. Load Upcoming List (Confirmed only)
+    const { data: upcoming } = await supabase
+        .from('bookings')
+        .select('*, bays(bay_name)')
+        .eq('status', 'Confirmed')
+        .order('scheduled_time', {ascending: true});
+
+    document.getElementById('booking-list').innerHTML = (upcoming && upcoming.length > 0) 
+        ? upcoming.map(b => `
+            <div style="background: white; border-left: 5px solid var(--primary); padding: 15px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                <div style="font-weight: bold; color: var(--dark);">${new Date(b.scheduled_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${new Date(b.scheduled_time).toLocaleDateString()}</div>
+                <div style="font-size: 0.9em;">${b.customer_name} (${b.plate_number})</div>
+                <div style="font-size: 0.8em; color: #888;">Bay: ${b.bays?.bay_name || 'N/A'}</div>
+            </div>
+        `).join('') 
+        : '<p style="color: gray;">No future bookings scheduled.</p>';
 }
 
 window.handleBayClick = async (id, status, bayName) => {
