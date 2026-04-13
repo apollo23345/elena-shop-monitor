@@ -375,21 +375,28 @@ window.filterServices = () => {
 
 window.filterInventory = () => {
     const query = document.getElementById('inv-search').value.toLowerCase();
-    const filtered = allInventory.filter(i => 
-        i.item_name.toLowerCase().includes(query) || 
-        (i.oem_ref_id && i.oem_ref_id.toLowerCase().includes(query))
-    );
+    const filtered = allInventory.filter(i => {
+        const name = (i.item_name || "").toLowerCase();
+        // Convert ID to string just in case it's stored as an int in Supabase
+        const oem = i.oem_ref_id ? String(i.oem_ref_id).toLowerCase() : "";
+        
+        return name.includes(query) || oem.includes(query);
+    });
     renderInventoryTable(filtered);
 };
 
 window.filterReceipts = () => {
     const query = document.getElementById('receipt-search').value.toLowerCase();
-    const filtered = allReceipts.filter(r => 
-        r.customer_name.toLowerCase().includes(query) || 
-        (r.plate_number && r.plate_number.toLowerCase().includes(query))
-    );
+    const filtered = allReceipts.filter(r => {
+        const name = (r.customer_name || "").toLowerCase();
+        // Check for plate number - adjust key name if your table uses 'plate' or 'vehicle_plate'
+        const plate = (r.plate_number || "").toLowerCase(); 
+        
+        return name.includes(query) || plate.includes(query);
+    });
     renderReceiptsTable(filtered);
 };
+
 // Save function 
     window.saveService = async (id) => {
         const name = document.getElementById(`edit-srv-name-${id}`).value;
