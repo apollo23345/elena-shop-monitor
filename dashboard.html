@@ -311,23 +311,24 @@ async function loadDashboard() {
     const { data: activeBookings } = await supabase.from('bookings').select('*').eq('status', 'Active');
     const { data: upcoming } = await supabase.from('bookings').select('*').eq('status', 'Confirmed').order('scheduled_time');
 
-    const getGroupedItemsHTML = (bookingId) => {
-        // FILTER BY BOOKING_ID, NOT PLATE
-        const items = allItems ? allItems.filter(item => item.booking_id === bookingId) : [];
-        if (items.length === 0) return '<p style="font-size:0.7em; color:gray; margin-top:5px;">No items added</p>';
+const getGroupedItemsHTML = (bookingId) => {
+    // ONLY show items that belong to THIS specific booking ID
+    const items = allItems ? allItems.filter(item => item.booking_id === bookingId) : [];
+    
+    if (items.length === 0) return '<p style="font-size:0.7em; color:gray; margin-top:5px;">No items added</p>';
 
-        const grouped = items.reduce((acc, item) => {
-            if (!acc[item.item_name]) acc[item.item_name] = { qty: 0, price: item.price };
-            acc[item.item_name].qty += item.qty;
-            return acc;
-        }, {});
+    const grouped = items.reduce((acc, item) => {
+        if (!acc[item.item_name]) acc[item.item_name] = { qty: 0, price: item.price };
+        acc[item.item_name].qty += item.qty;
+        return acc;
+    }, {});
 
-        return `<div class="item-list-display">
-            ${Object.keys(grouped).map(name => `
-                <div class="item-row"><span>${grouped[name].qty}x ${name}</span><span>₱${grouped[name].price * grouped[name].qty}</span></div>
-            `).join('')}
-        </div>`;
-    };
+    return `<div class="item-list-display">
+        ${Object.keys(grouped).map(name => `
+            <div class="item-row"><span>${grouped[name].qty}x ${name}</span><span>₱${grouped[name].price * grouped[name].qty}</span></div>
+        `).join('')}
+    </div>`;
+};
 
     // Render Bays
     document.getElementById('bay-grid').innerHTML = bays.map(bay => {
@@ -429,13 +430,11 @@ window.confirmAssignment = async () => {
 };
 
 window.releaseBay = async (id) => {
-    // 1. Get the bay data
+    // 1. Get the bay data to find out who is in it
     const { data: bay, error: bayErr } = await supabase.from('bays').select('*').eq('id', id).single();
     if (bayErr || !bay) return alert("Error finding bay data.");
 
-    // 2. Identify the booking ID assigned to this bay
-    // If you haven't added 'current_booking_id' to your table yet, 
-    // we fetch it manually here to be safe:
+    // 2. Find the SPECIFIC booking that is currently 'Active' in this bay
     const { data: activeBooking } = await supabase.from('bookings')
         .select('id')
         .eq('bay_id', id)
@@ -444,32 +443,30 @@ window.releaseBay = async (id) => {
         .single();
 
     if (!activeBooking) {
-        alert("Error: No active booking found for this bay.");
+        alert("Error: Could not find the specific booking for this job.");
         return;
     }
 
     if(!confirm("Finish job and proceed to checkout?")) return;
 
-    // 3. Clear the bay
+    // 3. Clear the bay and set mechanic to available
     await supabase.from('bays').update({ 
         status: 'Available', 
         current_plate: null, 
         current_customer: null, 
         current_mechanic_id: null,
-        current_booking_id: null // Clear this too
+        current_booking_id: null 
     }).eq('id', id);
 
-    // 4. Set mechanic to available
     if (bay.current_mechanic_id) {
         await supabase.from('mechanics').update({ status: 'Available' }).eq('id', bay.current_mechanic_id);
     }
 
-    // 5. DO NOT DELETE THE BOOKING YET. 
-    // Instead, mark it as 'Completed'. 
-    // This keeps the record so the Receipt knows what items to show!
+    // 4. Mark THIS specific booking as Completed
     await supabase.from('bookings').update({ status: 'Completed' }).eq('id', activeBooking.id);
     
-    // 6. Go to checkout with the SPECIFIC booking ID
+    // 5. CRITICAL: Redirect using the booking_id
+    // This tells the checkout page: "Only show items for this specific ID"
     window.location.href = `checkout.html?booking_id=${activeBooking.id}&plate=${bay.current_plate}`;
 };
 
