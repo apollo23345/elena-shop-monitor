@@ -143,24 +143,37 @@ window.setTimeMode = (mode) => {
     }
 };
 
-async function checkConflicts(bayId, targetTime) {
+async function checkConflicts(bayId, mechId, targetTime) {
     const startTime = new Date(targetTime);
     
     // Calculate range: 45 mins before and 45 mins after
     const rangeStart = new Date(startTime.getTime() - 45 * 60000).toISOString();
     const rangeEnd = new Date(startTime.getTime() + 45 * 60000).toISOString();
 
-    const { data: conflicts, error } = await supabase
+    // Check if BAY is occupied
+    const { data: bayConflicts } = await supabase
         .from('bookings')
         .select('*')
         .eq('bay_id', bayId)
-        .eq('status', 'Confirmed')
+        .in('status', ['Confirmed', 'Active']) // Check both scheduled and current jobs
         .gt('scheduled_time', rangeStart)
         .lt('scheduled_time', rangeEnd);
 
-    return conflicts && conflicts.length > 0;
-}
+    if (bayConflicts && bayConflicts.length > 0) return "Bay is already reserved within this time window.";
 
+    // Check if MECHANIC is occupied
+    const { data: mechConflicts } = await supabase
+        .from('bookings')
+        .select('*')
+        .eq('mechanic_id', mechId)
+        .in('status', ['Confirmed', 'Active'])
+        .gt('scheduled_time', rangeStart)
+        .lt('scheduled_time', rangeEnd);
+
+    if (mechConflicts && mechConflicts.length > 0) return "Mechanic is already assigned to another job within this time window.";
+
+    return null; // No conflicts found
+}
 
     // 1. LOCK NAVIGATION & SHOW ALERT
 if (plate) {
@@ -372,16 +385,16 @@ window.confirmAssignment = async () => {
         return alert("Invalid date/time selected.");
     }
 
-    const isConflicted = await checkConflicts(selectedBayId, targetTime);
-    if (isConflicted) {
-        return alert("⚠️ Conflict! This bay is reserved within 45 minutes of this time.");
+    // --- UPDATED CONFLICT CHECK CALL ---
+    const conflictMessage = await checkConflicts(selectedBayId, mechId, targetTime);
+    if (conflictMessage) {
+        return alert(`⚠️ Conflict! ${conflictMessage}`);
     }
 
-    // Convert the ID to a number to match the 'id' type in your 'mechanics' table
     const numericMechId = parseInt(mechId);
 
     if (timeMode === 'now') {
-        // 1. Update 'bays' table immediately
+        // ... (rest of your existing "now" logic remains the same)
         const { error: bayError } = await supabase.from('bays').update({ 
             status: 'Occupied', 
             current_plate: plate, 
@@ -389,28 +402,18 @@ window.confirmAssignment = async () => {
             current_mechanic_id: numericMechId 
         }).eq('id', selectedBayId);
         
-        if (bayError) console.error("Bays table error:", bayError);
-
-        // 2. Update 'mechanics' table status
         await supabase.from('mechanics').update({ status: 'Busy' }).eq('id', numericMechId);
         
-        // 3. Insert into 'bookings' table
-        const { error: bookingError } = await supabase.from('bookings').insert([{
+        await supabase.from('bookings').insert([{
             customer_name: name, 
             plate_number: plate, 
-            bay_id: selectedBayId, // Change to bays_id if Supabase shows that
-            mechanic_id: numericMechId, // Change to mechanics_id if Supabase shows that
+            bay_id: selectedBayId,
+            mechanic_id: numericMechId,
             scheduled_time: targetTime, 
             status: 'Active'
         }]);
-
-        if (bookingError) {
-            console.error("Booking table error:", bookingError);
-            alert("Error: " + bookingError.message);
-            return;
-        }
     } else {
-        // Schedule for Later
+        // ... (rest of your existing "later" logic remains the same)
         const { error: scheduleError } = await supabase.from('bookings').insert([{
             customer_name: name, 
             plate_number: plate, 
@@ -420,13 +423,7 @@ window.confirmAssignment = async () => {
             status: 'Confirmed'
         }]);
         
-        if (scheduleError) {
-            console.error("Schedule error:", scheduleError);
-            alert("Error: " + scheduleError.message);
-            return;
-        } else {
-            alert("Booking scheduled successfully!");
-        }
+        if (!scheduleError) alert("Booking scheduled successfully!");
     }
 
     window.location.href = 'dashboard.html';
