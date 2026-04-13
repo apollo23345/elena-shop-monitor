@@ -62,115 +62,118 @@
         <p id="status" style="text-align:center; color: #666;"></p>
     </div>
 
-    <script type="module">
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
+<script type="module">
+    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
 
-const supabaseUrl = 'https://yrqtnaxnshkkizradtsd.supabase.co'
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlycXRuYXhuc2hra2l6cmFkdHNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3ODY5NTMsImV4cCI6MjA5MTM2Mjk1M30.dBveYrCJ24XIkyx6rc-iVaYkdOBGgsa-wuCV2shr1cY'
-const supabase = createClient(supabaseUrl, supabaseKey)
+    // 1. DEFINE SUPABASE FIRST (This fixes the 'not defined' error)
+    const supabaseUrl = 'https://yrqtnaxnshkkizradtsd.supabase.co';
+    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlycXRuYXhuc2hra2l6cmFkdHNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3ODY5NTMsImV4cCI6MjA5MTM2Mjk1M30.dBveYrCJ24XIkyx6rc-iVaYkdOBGgsa-wuCV2shr1cY';
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
-// 1. IDENTITY & PROTECTION GATEKEEPER
-const user = JSON.parse(localStorage.getItem('currentUser'));
+    // 2. IDENTITY & PROTECTION GATEKEEPER
+    const user = JSON.parse(localStorage.getItem('currentUser'));
 
-if (!user) {
-    window.location.href = 'login.html';
-} else {
-    const nameDisplay = document.getElementById('display-user-name');
-    if(nameDisplay) nameDisplay.innerText = `${user.first_name} ${user.last_name}`;
+    if (!user) {
+        window.location.href = 'login.html';
+    } else {
+        const nameDisplay = document.getElementById('display-user-name');
+        if(nameDisplay) nameDisplay.innerText = `${user.first_name} ${user.last_name}`;
 
-    const adminBtn = document.getElementById('admin-nav');
-    if (adminBtn) {
-        if (user.manager_id !== null) {
-            adminBtn.style.display = 'none'; 
-            if (window.location.pathname.includes('admin.html')) {
-                window.location.href = 'dashboard.html';
+        const adminBtn = document.getElementById('admin-nav');
+        if (adminBtn) {
+            if (user.manager_id !== null) {
+                adminBtn.style.display = 'none'; 
+                if (window.location.pathname.includes('admin.html')) {
+                    window.location.href = 'dashboard.html';
+                }
+            } else {
+                adminBtn.style.display = 'block';
             }
-        } else {
-            adminBtn.style.display = 'block';
         }
     }
-}
 
-window.logout = () => {
-    localStorage.removeItem('currentUser');
-    window.location.href = 'login.html';
-};
+    window.logout = () => {
+        localStorage.removeItem('currentUser');
+        window.location.href = 'login.html';
+    };
 
-// 2. REGISTRATION LOGIC (CLEANED UP - ONLY ONCE)
-document.getElementById('regBtn').onclick = async () => {
-    const regBtn = document.getElementById('regBtn');
-    const fname = document.getElementById('fname').value.trim();
-    const lname = document.getElementById('lname').value.trim();
-    const phone = document.getElementById('phone').value.trim();
-    const plate = document.getElementById('plate').value.trim().toUpperCase();
-    const model = document.getElementById('car-model').value.trim();
-    const status = document.getElementById('status');
+    // 3. REGISTRATION LOGIC
+    document.getElementById('regBtn').onclick = async () => {
+        const regBtn = document.getElementById('regBtn');
+        const fname = document.getElementById('fname').value.trim();
+        const lname = document.getElementById('lname').value.trim();
+        const phone = document.getElementById('phone').value.trim();
+        const plate = document.getElementById('plate').value.trim().toUpperCase();
+        const model = document.getElementById('car-model').value.trim();
+        const status = document.getElementById('status');
 
-    if(!fname || !lname || !plate) return alert("Please fill in Name and Plate Number");
+        if(!fname || !lname || !plate) return alert("Please fill in Name and Plate Number");
 
-    // Disable button to prevent double-processing
-    regBtn.disabled = true;
-    status.innerText = "Searching records...";
+        // Prevent double clicks
+        regBtn.disabled = true;
+        status.innerText = "Searching records...";
 
-    try {
-        // A. SEARCH FOR CUSTOMER
-        const { data: existingCustomer, error: custSearchErr } = await supabase
-            .from('customer')
-            .select('id')
-            .eq('firstname', fname)
-            .eq('lastname', lname)
-            .maybeSingle();
-
-        if (custSearchErr) throw custSearchErr;
-
-        let customerId;
-
-        if (existingCustomer) {
-            customerId = existingCustomer.id;
-            // CHECK FOR CAR
-            const { data: existingCar } = await supabase
-                .from('cars')
-                .select('plate_number')
-                .eq('plate_number', plate)
-                .eq('customer_id', customerId)
+        try {
+            // Check for customer
+            const { data: existingCustomer, error: custSearchErr } = await supabase
+                .from('customer')
+                .select('id')
+                .eq('firstname', fname)
+                .eq('lastname', lname)
                 .maybeSingle();
 
-            if (existingCar) {
-                status.innerText = "Welcome back! Redirecting...";
+            if (custSearchErr) throw custSearchErr;
+
+            let customerId;
+
+            if (existingCustomer) {
+                customerId = existingCustomer.id;
+                // Check if they own this car
+                const { data: existingCar } = await supabase
+                    .from('cars')
+                    .select('plate_number')
+                    .eq('plate_number', plate)
+                    .eq('customer_id', customerId)
+                    .maybeSingle();
+
+                if (existingCar) {
+                    status.innerText = "Welcome back! Redirecting...";
+                } else {
+                    status.innerText = "Adding new vehicle to profile...";
+                    const { error: carErr } = await supabase
+                        .from('cars')
+                        .insert([{ plate_number: plate, brand: model, customer_id: customerId }]);
+                    if (carErr) throw carErr;
+                }
             } else {
-                status.innerText = "Adding new vehicle...";
+                // Register new customer
+                status.innerText = "Registering new customer...";
+                const { data: newCust, error: insErr } = await supabase
+                    .from('customer')
+                    .insert([{ firstname: fname, lastname: lname, contactnum: phone }])
+                    .select();
+                
+                if (insErr) throw insErr;
+                customerId = newCust[0].id;
+
                 const { error: carErr } = await supabase
                     .from('cars')
                     .insert([{ plate_number: plate, brand: model, customer_id: customerId }]);
                 if (carErr) throw carErr;
             }
-        } else {
-            // NEW CUSTOMER
-            status.innerText = "Registering new customer...";
-            const { data: newCust, error: insErr } = await supabase
-                .from('customer')
-                .insert([{ firstname: fname, lastname: lname, contactnum: phone }])
-                .select();
-            if (insErr) throw insErr;
-            
-            customerId = newCust[0].id;
-            const { error: carErr } = await supabase
-                .from('cars')
-                .insert([{ plate_number: plate, brand: model, customer_id: customerId }]);
-            if (carErr) throw carErr;
+
+            status.innerText = "Success! Redirecting...";
+            setTimeout(() => {
+                window.location.href = `service-booking.html?plate=${plate}&name=${fname}`;
+            }, 1000);
+
+        } catch (err) {
+            console.error(err);
+            alert("Database error: " + err.message);
+            status.innerText = "Error occurred.";
+            regBtn.disabled = false;
         }
-
-        status.innerText = "Success! Redirecting...";
-        setTimeout(() => {
-            window.location.href = `service-booking.html?plate=${plate}&name=${fname}`;
-        }, 1000);
-
-    } catch (err) {
-        alert("System Error: " + err.message);
-        status.innerText = "Ready.";
-        regBtn.disabled = false;
-    }
-};
-    </script>
+    };
+</script>
 </body>
 </html>
