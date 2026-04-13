@@ -211,9 +211,10 @@ window.cancelPendingTransaction = async () => {
         // 1. Fetch the pending items using the correct column names from your table
         const { data: items, error: fetchError } = await supabase
             .from('transaction_details')
-            .select('item_name, qty, item_type') 
-            .eq('plate_number', plate);
-        
+            .select('*') 
+            .eq('plate_number', plate)
+            .is('booking_id', null); // <--- Critical filter       
+
         if (fetchError) {
             alert("Error fetching pending items: " + fetchError.message);
             return;
@@ -247,8 +248,8 @@ window.cancelPendingTransaction = async () => {
         const { error: deleteError } = await supabase
             .from('transaction_details')
             .delete()
-            .eq('plate_number', plate);
-        
+            .eq('plate_number', plate)
+            .is('booking_id', null);
         if (!deleteError) {
             window.location.href = 'dashboard.html';
         } else {
@@ -425,11 +426,18 @@ window.releaseBay = async (id) => {
         return;
     }
     
-    if(!confirm("Are you sure this job is finished? This will also clear the booking schedule.")) return;
+    if(!confirm("Are you sure this job is finished?")) return;
 
-    // 1. Get the data BEFORE we clear it
+    // 1. Get the bay and the SPECIFIC active booking for it
     const { data: bay } = await supabase.from('bays').select('*').eq('id', id).single();
-    if (!bay) return;
+    const { data: activeBooking } = await supabase.from('bookings')
+        .select('id')
+        .eq('bay_id', id)
+        .eq('plate_number', bay.current_plate)
+        .eq('status', 'Active') // <--- ONLY target the active one
+        .single();
+
+    if (!bay || !activeBooking) return alert("Could not find active booking record.");
 
     // 2. Clear the bay
     await supabase.from('bays').update({ 
@@ -444,15 +452,11 @@ window.releaseBay = async (id) => {
         await supabase.from('mechanics').update({ status: 'Available' }).eq('id', bay.current_mechanic_id);
     }
 
-    // --- UPDATED: DELETE BOOKINGS FOR THIS SPECIFIC JOB ---
-    // This ensures that even if the status was still 'Confirmed', it gets removed upon finishing
-    await supabase.from('bookings')
-        .delete()
-        .eq('plate_number', bay.current_plate)
-        .eq('bay_id', id);
+    // 4. Delete ONLY the active booking
+    await supabase.from('bookings').delete().eq('id', activeBooking.id);
     
-    // 4. Navigate to checkout
-    window.location.href = `checkout.html?plate=${bay.current_plate}&name=${encodeURIComponent(bay.current_customer)}`;
+    // 5. Navigate to checkout with the BOOKING ID
+    window.location.href = `checkout.html?plate=${bay.current_plate}&name=${encodeURIComponent(bay.current_customer)}&booking_id=${activeBooking.id}`;
 };
 
     window.closeModal = () => document.getElementById('modal').style.display = 'none';
