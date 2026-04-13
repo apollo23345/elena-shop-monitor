@@ -387,7 +387,7 @@ window.confirmAssignment = async () => {
     const conflictMessage = await checkConflicts(selectedBayId, mechId, targetTime);
     if (conflictMessage) return alert(`⚠️ Conflict! ${conflictMessage}`);
 
-    // 1. Create the Booking entry first to get an ID
+    // 1. Create the Booking entry
     const { data: newBooking, error: bErr } = await supabase.from('bookings').insert([{
         customer_name: name, 
         plate_number: plate, 
@@ -395,28 +395,35 @@ window.confirmAssignment = async () => {
         mechanic_id: parseInt(mechId),
         scheduled_time: targetTime, 
         status: timeMode === 'now' ? 'Active' : 'Confirmed'
-    }]).select().single();
+    }]).select(); // Removed .single() briefly to ensure we get an array back for safety
 
-    if (bErr) return alert("Booking Error: " + bErr.message);
+    if (bErr || !newBooking) {
+        console.error("Booking Error:", bErr);
+        return alert("Booking Error: " + (bErr?.message || "Unknown error"));
+    }
 
-    // 2. Link pending transaction items to THIS specific booking ID
-    // This prevents future bookings for the same plate from "stealing" these items
+    const bookingId = newBooking[0].id;
+
+    // 2. Link items to THIS booking
     await supabase.from('transaction_details')
-        .update({ booking_id: newBooking.id })
+        .update({ booking_id: bookingId })
         .eq('plate_number', plate)
         .is('booking_id', null); 
 
-if (timeMode === 'now') {
-    await supabase.from('bays').update({ 
-        status: 'Occupied', 
-        current_plate: plate, 
-        current_customer: name, 
-        current_mechanic_id: parseInt(mechId),
-        current_booking_id: newBooking.id // <--- ADD THIS
-    }).eq('id', selectedBayId);
-    
-    await supabase.from('mechanics').update({ status: 'Busy' }).eq('id', parseInt(mechId));
-}
+    // 3. Update Bay if 'Now'
+    if (timeMode === 'now') {
+        const { error: bayErr } = await supabase.from('bays').update({ 
+            status: 'Occupied', 
+            current_plate: plate, 
+            current_customer: name, 
+            current_mechanic_id: parseInt(mechId),
+            current_booking_id: bookingId 
+        }).eq('id', selectedBayId);
+
+        if(bayErr) console.error("Bay Update Error:", bayErr);
+        
+        await supabase.from('mechanics').update({ status: 'Busy' }).eq('id', parseInt(mechId));
+    }
 
     window.location.href = 'dashboard.html';
 };
