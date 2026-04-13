@@ -117,6 +117,21 @@
         </div>
     </div>
 
+    <div class="card" style="margin-top: 20px; border: 2px solid #e74c3c;">
+    <h3 style="color: #c0392b;">🛡️ Emergency Recovery System</h3>
+    <p style="font-size: 0.85em;">This creates a full "Ghost Copy" of the shop's state including Bookings and Parts used.</p>
+    
+    <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+        <button onclick="createBackup('Hour')" style="background:#3498db; color:white; border:none; padding:10px; border-radius:4px; cursor:pointer;">1-Hour Snapshot</button>
+        <button onclick="createBackup('Day')" style="background:#9b59b6; color:white; border:none; padding:10px; border-radius:4px; cursor:pointer;">24-Hour Snapshot</button>
+        <button onclick="createBackup('Week')" style="background:#34495e; color:white; border:none; padding:10px; border-radius:4px; cursor:pointer;">Weekly Master</button>
+    </div>
+
+    <div id="backup-list" style="max-height: 250px; overflow-y: auto; background: #fff5f5; border: 1px solid #fab1a0; padding: 10px; border-radius: 4px;">
+        Checking for restore points...
+    </div>
+</div>
+
 </body>
 
 <script type="module">
@@ -162,6 +177,102 @@ window.logout = () => {
     localStorage.removeItem('currentUser');
     window.location.href = 'login.html';
 };
+
+// Add this to your existing <script type="module">
+
+window.createBackup = async (type) => {
+    // List of ALL tables that matter to the shop
+    const tablesToBackup = ['inventory', 'service', 'mechanics', 'bookings', 'transaction_details', 'bays']; 
+    
+    try {
+        for (const tableName of tablesToBackup) {
+            const { data: currentData, error: fetchErr } = await supabase.from(tableName).select('*');
+            
+            if (fetchErr) throw fetchErr;
+
+            const { error: insErr } = await supabase.from('backups').insert([{
+                table_name: tableName,
+                data_json: currentData, // Even if this contains JSON, Supabase handles it
+                backup_type: type
+            }]);
+            
+            if (insErr) throw insErr;
+        }
+        alert(`✅ Full ${type} System Snapshot Recorded.`);
+        loadBackups();
+    } catch (err) {
+        console.error("Backup failed:", err);
+        alert("Backup failed! Check console.");
+    }
+};
+
+window.requestRestore = async (backupId) => {
+    // 1. IDENTITY CHALLENGE
+    const userPrompt = prompt("ADMIN CLEARANCE REQUIRED: Enter your Username:");
+    if (!userPrompt) return;
+    
+    const passPrompt = prompt(`Enter Password for ${userPrompt}:`);
+    if (!passPrompt) return;
+
+    const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+
+    // 2. VERIFY credentials from the current session
+    if (userPrompt !== currentUser.username || passPrompt !== currentUser.password) {
+        alert("❌ ACCESS DENIED: Credentials do not match current Admin.");
+        return;
+    }
+
+    if (!confirm("⚠️ WARNING: This will DELETE all current bookings/parts and restore the snapshot. Continue?")) return;
+
+    try {
+        // 3. GET BACKUP DATA
+        const { data: backup } = await supabase.from('backups').select('*').eq('id', backupId).single();
+        if (!backup) return alert("Backup file not found.");
+
+        const tableName = backup.table_name;
+        const restoredData = backup.data_json;
+
+        // 4. THE WIPE & REPLACEMENT
+        // Delete all rows in the target table
+        const { error: delErr } = await supabase.from(tableName).delete().neq('id', -1); 
+        if (delErr) throw delErr;
+
+        // Insert the snapshot data
+        const { error: resErr } = await supabase.from(tableName).insert(restoredData);
+        if (resErr) throw resErr;
+
+        alert(`✅ ${tableName} has been successfully reversed to the past state.`);
+        window.location.reload();
+
+    } catch (err) {
+        console.error("Restore failed:", err);
+        alert("Critical Restore Error: " + err.message);
+    }
+};
+
+// Update the list display
+async function loadBackups() {
+    const { data: backups } = await supabase.from('backups').select('*').order('created_at', { ascending: false });
+    const listDiv = document.getElementById('backup-list');
+    
+    if (!backups || backups.length === 0) {
+        listDiv.innerHTML = "<i>No recovery points available.</i>";
+        return;
+    }
+
+    listDiv.innerHTML = backups.map(b => `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding: 10px; border-bottom: 1px solid #ddd; background: white; margin-bottom: 5px; border-radius: 4px;">
+            <div>
+                <span style="color:#d63031; font-weight:bold;">[${b.backup_type}]</span> 
+                <b>${b.table_name}</b><br>
+                <small style="color:gray;">Saved: ${new Date(b.created_at).toLocaleString()}</small>
+            </div>
+            <button onclick="requestRestore(${b.id})" style="background:#0984e3; color:white; border:none; padding:8px 12px; border-radius:4px; cursor:pointer;">Restore This</button>
+        </div>
+    `).join('');
+}
+
+loadBackups();
 
     const urlParams = new URLSearchParams(window.location.search);
     const plate = urlParams.get('plate');
