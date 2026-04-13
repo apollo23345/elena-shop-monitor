@@ -377,9 +377,15 @@ const btn = document.getElementById(btnId);
     const qty = document.getElementById('inv-qty').value;
     const existingOem = document.getElementById('inv-oem-id').value;
     
-    // FIX: If the box is empty, create a unique ID. 
-    // If they used the 'Alternative' search, it uses that instead.
-    const finalOem = existingOem || "OEM-" + Math.random().toString(36).substr(2, 9).toUpperCase();
+    // LOGIC: 
+    // 1. If 'existingOem' has a value (from your syncOEMRef function), use it.
+    // 2. If 'existingOem' is empty (blank box), create a new 9-digit number.
+    let finalOem;
+    if (existingOem && existingOem !== "") {
+        finalOem = parseInt(existingOem); // Ensure it's a number for the DB
+    } else {
+        finalOem = Math.floor(100000000 + Math.random() * 900000000); 
+    }
 
     const { error } = await supabase.from('inventory').insert([{ 
         item_name: name, 
@@ -389,8 +395,9 @@ const btn = document.getElementById(btnId);
     }]);
     
     if (error) {
-        alert(error.message);
+        alert("Database Error: " + error.message);
     } else {
+        alert("New Item Added! OEM ID: " + finalOem);
         // Reset fields
         document.getElementById('inv-name').value = '';
         document.getElementById('inv-price').value = '';
@@ -422,15 +429,15 @@ const btn = document.getElementById(btnId);
 // oem ref id alternative functuin
 window.syncOEMRef = (input, mode, id = null) => {
     const val = input.value;
-    // Find the original item that has the OEM Ref we want to copy
     const originalItem = allInventory.find(i => i.item_name === val);
     
     if (mode === 'add') {
         const hiddenInput = document.getElementById('inv-oem-id');
+        // If found, copy the OEM ID, otherwise leave blank to trigger auto-gen
         hiddenInput.value = originalItem ? originalItem.oem_ref_id : "";
     } else if (mode === 'edit') {
         const hiddenEditInput = document.getElementById(`edit-inv-oem-${id}`);
-        hiddenEditInput.value = originalItem ? originalItem.oem_ref_id : "";
+        if (originalItem) hiddenEditInput.value = originalItem.oem_ref_id;
     }
 };
 
