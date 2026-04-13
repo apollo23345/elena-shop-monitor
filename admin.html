@@ -74,6 +74,15 @@
 
         /* Editing mode styles */
         .edit-input { width: 100%; padding: 5px; box-sizing: border-box; }
+
+        .status-badge {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.85em;
+    text-transform: uppercase;
+}
+.status-badge.active { background: #e3f2fd; color: #1976d2; border: 1px solid #1976d2; }
+.status-badge.confirmed { background: #e8f5e9; color: #2e7d32; border: 1px solid #2e7d32; }
     </style>
 </head>
 <body>
@@ -511,7 +520,7 @@ window.saveBooking = async (id) => {
     const bayId = document.getElementById(`edit-bk-bay-${id}`).value;
     const mechId = document.getElementById(`edit-bk-mech-${id}`).value;
     const rawTime = document.getElementById(`edit-bk-time-${id}`).value;
-    const status = document.getElementById(`edit-bk-status-${id}`).value;
+    // Status is no longer pulled from an input since it is view-only
 
     if (!rawTime) return alert("Please select a valid time.");
     const isoTime = new Date(rawTime).toISOString();
@@ -519,15 +528,15 @@ window.saveBooking = async (id) => {
     // TRIGGER CONFLICT CHECK
     const hasConflict = await checkAdminConflict(id, bayId, mechId, isoTime);
     if (hasConflict) {
-        alert("⚠️ Conflict Detected! Either the Mechanic or the Bay is already occupied at this time. Please choose a different slot.");
+        alert("⚠️ Conflict Detected! Either the Mechanic or the Bay is already occupied at this time.");
         return;
     }
 
     const { error } = await supabase.from('bookings').update({
         bay_id: bayId,
         mechanic_id: mechId,
-        scheduled_time: isoTime,
-        status: status
+        scheduled_time: isoTime
+        // We removed status from the update
     }).eq('id', id);
 
     if (error) alert(error.message);
@@ -673,8 +682,10 @@ function renderBookingsTable(data) {
     const tbody = document.querySelector(`#table-bookings tbody`);
     if (!tbody) return;
 
-    tbody.innerHTML = data.map(b => {
-        // Format date for the input (datetime-local expects YYYY-MM-DDTHH:MM)
+    // Filter to show only Active and Confirmed
+    const filteredData = data.filter(b => b.status === 'Active' || b.status === 'Confirmed');
+
+    tbody.innerHTML = filteredData.map(b => {
         const localTime = new Date(b.scheduled_time).toLocaleString('sv-SE', { 
             year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' 
         }).replace(' ', 'T');
@@ -683,26 +694,24 @@ function renderBookingsTable(data) {
             <tr>
                 <td><strong>${b.customer_name}</strong><br><small>${b.plate_number}</small></td>
                 <td>
-                    <select id="edit-bk-bay-${b.id}">
+                    <select id="edit-bk-bay-${b.id}" class="edit-input">
                         ${allBays.map(bay => `<option value="${bay.id}" ${bay.id == b.bay_id ? 'selected' : ''}>${bay.bay_name}</option>`).join('')}
                     </select>
                 </td>
                 <td>
-                    <select id="edit-bk-mech-${b.id}">
-                        ${allMechanics.map(m => `<option value="${m.id}" ${m.id == b.mechanic_id ? 'selected' : ''}>${m.first_name}</option>`).join('')}
+                    <select id="edit-bk-mech-${b.id}" class="edit-input">
+                        ${allMechanics.map(m => `<option value="${m.id}" ${m.id == b.mechanic_id ? 'selected' : ''}>${m.first_name} ${m.last_name}</option>`).join('')}
                     </select>
                 </td>
-                <td><input type="datetime-local" id="edit-bk-time-${b.id}" value="${localTime}"></td>
+                <td><input type="datetime-local" class="edit-input" id="edit-bk-time-${b.id}" value="${localTime}"></td>
                 <td>
-                    <select id="edit-bk-status-${b.id}">
-                        <option value="Confirmed" ${b.status === 'Confirmed' ? 'selected' : ''}>Confirmed</option>
-                        <option value="Active" ${b.status === 'Active' ? 'selected' : ''}>Active</option>
-                        <option value="Completed" ${b.status === 'Completed' ? 'selected' : ''}>Completed</option>
-                    </select>
+                    <span class="status-badge ${b.status.toLowerCase()}">
+                        <strong>${b.status}</strong>
+                    </span>
                 </td>
                 <td>
-                    <button class="btn-save" onclick="saveBooking('${b.id}')">Save</button>
-                    <button class="btn-del" onclick="deleteBooking('${b.id}')">X</button>
+                    <button class="btn-save" onclick="saveBooking('${b.id}')">Update</button>
+                    <button class="btn-del" onclick="deleteBooking('${b.id}')">Delete</button>
                 </td>
             </tr>
         `;
