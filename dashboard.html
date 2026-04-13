@@ -338,42 +338,48 @@ window.confirmAssignment = async () => {
     
     if(!mechId) return alert("Please select a mechanic");
 
-    const targetTime = timeMode === 'now' ? new Date().toISOString() : new Date(bookingInput).toISOString();
+    // FIX: Ensure we use a proper ISO string for both cases
+    let targetTime;
+    if (timeMode === 'now') {
+        targetTime = new Date().toISOString();
+    } else {
+        if (!bookingInput) return alert("Please pick a time");
+        // This converts the local input string directly to a Date object then to UTC ISO
+        targetTime = new Date(bookingInput).toISOString();
+    }
 
-    if (timeMode === 'later' && !bookingInput) return alert("Please pick a time");
-
-    // Check for 45-min conflict
     const isConflicted = await checkConflicts(selectedBayId, targetTime);
     if (isConflicted) {
-        return alert("⚠️ Conflict! This bay is reserved within 45 minutes of this time. Please pick another slot.");
+        return alert("⚠️ Conflict! This bay is reserved within 45 minutes of this time.");
     }
 
     if (timeMode === 'now') {
-        // EXECUTE NOW: Update Bay table immediately
         await supabase.from('bays').update({ 
             status: 'Occupied', current_plate: plate, current_customer: name, current_mechanic_id: mechId 
         }).eq('id', selectedBayId);
         
         await supabase.from('mechanics').update({ status: 'Busy' }).eq('id', mechId);
         
-        // Also save to bookings as "Completed" or "Active" for history
         await supabase.from('bookings').insert([{
             customer_name: name, plate_number: plate, bay_id: selectedBayId,
             mechanic_id: mechId, scheduled_time: targetTime, status: 'Active'
         }]);
     } else {
-        // SCHEDULE LATER: Just save to bookings table
         const { error } = await supabase.from('bookings').insert([{
             customer_name: name, plate_number: plate, bay_id: selectedBayId,
             mechanic_id: mechId, scheduled_time: targetTime, status: 'Confirmed'
         }]);
         
-        if (!error) alert("Booking scheduled successfully!");
+        if (error) {
+            console.error(error);
+            alert("Error saving booking");
+        } else {
+            alert("Booking scheduled!");
+        }
     }
 
     window.location.href = 'dashboard.html';
 };
-
 
 window.releaseBay = async (id) => {
     if (plate) {
