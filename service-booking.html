@@ -268,24 +268,46 @@
         updateSummary();
     };
 
-    window.finalizeBooking = async () => {
-        if(selectedItems.length === 0) return alert("Select at least one item!");
-        const insertData = [];
-        selectedItems.forEach(item => {
-            for(let i = 0; i < item.qty; i++) {
-                insertData.push({ plate_number: plate, item_type: item.type, item_name: item.name, price: item.price });
-            }
-        });
-        const { error: transError } = await supabase.from('transaction_details').insert(insertData);
-        if (transError) return alert("Error: " + transError.message);
+window.finalizeBooking = async () => {
+    if(selectedItems.length === 0) return alert("Select at least one item!");
 
-        for (const part of selectedItems.filter(item => item.type === 'Part')) {
-            const invItem = inventoryData.find(i => i.id === part.id);
-            if (invItem) await supabase.from('inventory').update({ stock_quantity: invItem.current_qty }).eq('id', part.id);
+    // 1. Calculate Total Amount once
+    const totalAmount = selectedItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
+
+    // 2. Prepare detailed rows for transaction_details (for the mechanics/logs)
+    const insertData = [];
+    selectedItems.forEach(item => {
+        // We still save individual rows, but we keep the price accurate
+        for(let i = 0; i < item.qty; i++) {
+            insertData.push({ 
+                plate_number: plate, 
+                item_type: item.type, 
+                item_name: item.name, 
+                price: item.price // Ensure this is the unit price
+            });
         }
-        window.location.href = `dashboard.html?plate=${plate}&name=${name}`;
-    };
+    });
 
+    // 3. Update Inventory Stock in Supabase
+    for (const part of selectedItems.filter(item => item.type === 'Part')) {
+        const invItem = inventoryData.find(i => i.id === part.id);
+        if (invItem) {
+            await supabase.from('inventory')
+                .update({ stock_quantity: invItem.current_qty })
+                .eq('id', part.id);
+        }
+    }
+
+    // 4. Save to transaction_details
+    const { error: transError } = await supabase.from('transaction_details').insert(insertData);
+    
+    if (transError) {
+        alert("Error saving details: " + transError.message);
+    } else {
+        alert("Booking Successful!");
+        window.location.href = `dashboard.html?plate=${plate}&name=${name}`;
+    }
+};
     loadOptions();
 </script>
 </html>
