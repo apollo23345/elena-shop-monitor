@@ -90,71 +90,152 @@ document.getElementById('regBtn').onclick = async () => {
     const fname = document.getElementById('fname').value.trim();
     const lname = document.getElementById('lname').value.trim();
     const phone = document.getElementById('phone').value.trim();
-    const plate = document.getElementById('plate').value.trim().toUpperCase(); // Keep plates consistent
+    const plate = document.getElementById('plate').value.trim().toUpperCase();
     const model = document.getElementById('car-model').value.trim();
     const status = document.getElementById('status');
 
     if(!fname || !lname || !plate) return alert("Please fill in Name and Plate Number");
 
-    status.innerText = "Checking records...";
+    status.innerText = "Searching records...";
 
-// 1. CHECK IF THE CAR ALREADY EXISTS (Simplified)
-    const { data: existingCar, error: searchErr } = await supabase
-        .from('cars')
-        .select('plate_number, customer_id') // Just get the basics first
-        .eq('plate_number', plate)
+    // 1. SEARCH FOR THE CUSTOMER FIRST
+    const { data: existingCustomer, error: custSearchErr } = await supabase
+        .from('customer')
+        .select('id, firstname, lastname')
+        .eq('firstname', fname)
+        .eq('lastname', lname)
         .maybeSingle();
 
-    if (searchErr) {
-        status.innerText = "Error searching records: " + searchErr.message;
-        return;
-    }
+    if (custSearchErr) return status.innerText = "Error: " + custSearchErr.message;
 
-    // 2. IF CAR EXISTS: Get the customer name separately to avoid the JSON error
-    if (existingCar) {
-        const { data: custInfo } = await supabase
-            .from('customer')
-            .select('firstname')
-            .eq('id', existingCar.customer_id)
-            .single();
+    let customerId;
 
-        const welcomeName = custInfo ? custInfo.firstname : "Valued Customer";
+    if (existingCustomer) {
+        // CUSTOMER EXISTS - Now check if they own THIS specific car
+        customerId = existingCustomer.id;
         
-        status.innerText = "Welcome back, " + welcomeName + "! Redirecting...";
-        setTimeout(() => {
-            window.location.href = `service-booking.html?plate=${plate}&name=${welcomeName}`;
-        }, 1200);
-        return; 
-    }
-    
-    // 3. IF CAR IS NEW: Proceed with Registration
-    status.innerText = "New customer detected. Registering...";
+        const { data: existingCar } = await supabase
+            .from('cars')
+            .select('plate_number')
+            .eq('plate_number', plate)
+            .eq('customer_id', customerId)
+            .maybeSingle();
 
-    // A. Insert Customer
-    const { data: custData, error: custErr } = await supabase
-        .from('customer')
-        .insert([{ firstname: fname, lastname: lname, contactnum: phone }])
-        .select();
-
-    if (custErr) {
-        status.innerText = "Error: " + custErr.message;
-        return;
-    }
-
-    // B. Insert Car linked to the new Customer
-    const customerId = custData[0].id;
-    const { error: carErr } = await supabase
-        .from('cars')
-        .insert([{ plate_number: plate, brand: model, customer_id: customerId }]);
-
-    if (carErr) {
-        status.innerText = "Error saving car: " + carErr.message;
+        if (existingCar) {
+            status.innerText = `Welcome back, ${fname}! Redirecting to booking...`;
+            setTimeout(() => {
+                window.location.href = `service-booking.html?plate=${plate}&name=${fname}`;
+            }, 1200);
+            return;
+        } else {
+            // New car for an existing customer
+            status.innerText = "Adding new vehicle to your profile...";
+            const { error: carErr } = await supabase
+                .from('cars')
+                .insert([{ plate_number: plate, brand: model, customer_id: customerId }]);
+            
+            if (carErr) return status.innerText = "Error linking car: " + carErr.message;
+        }
     } else {
-        status.innerText = "Registration Complete! Redirecting...";
-        setTimeout(() => {
-            window.location.href = `service-booking.html?plate=${plate}&name=${fname}`;
-        }, 1500);
+        // 2. NEW CUSTOMER DETECTED (Or Plate sold to someone else)
+        status.innerText = "Registering new customer...";
+        
+        const { data: newCust, error: insErr } = await supabase
+            .from('customer')
+            .insert([{ firstname: fname, lastname: lname, contactnum: phone }])
+            .select();
+
+        if (insErr) return status.innerText = "Error: " + insErr.message;
+        
+        customerId = newCust[0].id;
+
+        // Register the car under this new owner
+        const { error: carErr } = await supabase
+            .from('cars')
+            .insert([{ plate_number: plate, brand: model, customer_id: customerId }]);
+
+        if (carErr) return status.innerText = "Error saving car: " + carErr.message;
     }
+
+    status.innerText = "Success! Redirecting...";
+    setTimeout(() => {
+        window.location.href = `service-booking.html?plate=${plate}&name=${fname}`;
+    }, 1500);
+};document.getElementById('regBtn').onclick = async () => {
+    const fname = document.getElementById('fname').value.trim();
+    const lname = document.getElementById('lname').value.trim();
+    const phone = document.getElementById('phone').value.trim();
+    const plate = document.getElementById('plate').value.trim().toUpperCase();
+    const model = document.getElementById('car-model').value.trim();
+    const status = document.getElementById('status');
+
+    if(!fname || !lname || !plate) return alert("Please fill in Name and Plate Number");
+
+    status.innerText = "Searching records...";
+
+    // 1. SEARCH FOR THE CUSTOMER FIRST
+    const { data: existingCustomer, error: custSearchErr } = await supabase
+        .from('customer')
+        .select('id, firstname, lastname')
+        .eq('firstname', fname)
+        .eq('lastname', lname)
+        .maybeSingle();
+
+    if (custSearchErr) return status.innerText = "Error: " + custSearchErr.message;
+
+    let customerId;
+
+    if (existingCustomer) {
+        // CUSTOMER EXISTS - Now check if they own THIS specific car
+        customerId = existingCustomer.id;
+        
+        const { data: existingCar } = await supabase
+            .from('cars')
+            .select('plate_number')
+            .eq('plate_number', plate)
+            .eq('customer_id', customerId)
+            .maybeSingle();
+
+        if (existingCar) {
+            status.innerText = `Welcome back, ${fname}! Redirecting to booking...`;
+            setTimeout(() => {
+                window.location.href = `service-booking.html?plate=${plate}&name=${fname}`;
+            }, 1200);
+            return;
+        } else {
+            // New car for an existing customer
+            status.innerText = "Adding new vehicle to your profile...";
+            const { error: carErr } = await supabase
+                .from('cars')
+                .insert([{ plate_number: plate, brand: model, customer_id: customerId }]);
+            
+            if (carErr) return status.innerText = "Error linking car: " + carErr.message;
+        }
+    } else {
+        // 2. NEW CUSTOMER DETECTED (Or Plate sold to someone else)
+        status.innerText = "Registering new customer...";
+        
+        const { data: newCust, error: insErr } = await supabase
+            .from('customer')
+            .insert([{ firstname: fname, lastname: lname, contactnum: phone }])
+            .select();
+
+        if (insErr) return status.innerText = "Error: " + insErr.message;
+        
+        customerId = newCust[0].id;
+
+        // Register the car under this new owner
+        const { error: carErr } = await supabase
+            .from('cars')
+            .insert([{ plate_number: plate, brand: model, customer_id: customerId }]);
+
+        if (carErr) return status.innerText = "Error saving car: " + carErr.message;
+    }
+
+    status.innerText = "Success! Redirecting...";
+    setTimeout(() => {
+        window.location.href = `service-booking.html?plate=${plate}&name=${fname}`;
+    }, 1500);
 };
     </script>
 </body>
