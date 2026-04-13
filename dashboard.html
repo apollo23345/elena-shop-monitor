@@ -310,8 +310,14 @@ async function loadDashboard() {
     // Fetch bookings to get the IDs for active bay items
     const { data: activeBookings } = await supabase.from('bookings').select('*').eq('status', 'Active');
     const { data: upcoming } = await supabase.from('bookings').select('*').eq('status', 'Confirmed').order('scheduled_time');
+// --- ADD THESE LINES TO CLEAR OLD DATA ---
+    document.getElementById('bay-grid').innerHTML = '';
+    document.getElementById('mechanic-list').innerHTML = '';
+    document.getElementById('booking-list').innerHTML = '';
+    // ------------------------------------------
 
-const getGroupedItemsHTML = (bookingId) => {
+
+    const getGroupedItemsHTML = (bookingId) => {
     // ONLY show items that belong to THIS specific booking ID
     const items = allItems ? allItems.filter(item => item.booking_id === bookingId) : [];
     
