@@ -119,18 +119,16 @@
     let allFoundTransactions = []; 
 
 async function loadReceipt() {
-    const bookingId = urlParams.get('booking_id'); // Get the specific ID from the URL
+    const bookingId = urlParams.get('booking_id');
+    const urlName = urlParams.get('name'); // Try to get from URL
 
     if (!plate) return;
 
-    document.getElementById('res-name').innerText = name || "---";
     document.getElementById('res-plate').innerText = plate;
     document.getElementById('res-date').innerText = new Date().toLocaleDateString();
 
     let query = supabase.from('transaction_details').select('*');
 
-    // CRITICAL: If we have a bookingId, ONLY get items for that job.
-    // If not (manual lookup), fall back to plate.
     if (bookingId) {
         query = query.eq('booking_id', bookingId);
     } else {
@@ -142,6 +140,17 @@ async function loadReceipt() {
     if (error) return console.error(error);
     
     currentItems = items || []; 
+    
+    // SMART NAME RECOVERY:
+    // If name isn't in URL, try to get it from the first item found in the list
+    if (urlName) {
+        document.getElementById('res-name').innerText = decodeURIComponent(urlName);
+    } else if (currentItems.length > 0 && currentItems[0].customer_name) {
+        document.getElementById('res-name').innerText = currentItems[0].customer_name;
+    } else {
+        document.getElementById('res-name').innerText = "Walk-in Customer";
+    }
+
     renderTable(currentItems);
 }
 

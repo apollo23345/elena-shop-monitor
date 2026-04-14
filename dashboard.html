@@ -547,7 +547,7 @@ window.releaseBay = async (id) => {
     
     // 5. CRITICAL: Redirect using the booking_id
     // This tells the checkout page: "Only show items for this specific ID"
-    window.location.href = `checkout.html?booking_id=${activeBooking.id}&plate=${bay.current_plate}`;
+window.location.href = `checkout.html?booking_id=${activeBooking.id}&plate=${bay.current_plate}&name=${encodeURIComponent(bay.current_customer)}`;
 };
 
     window.closeModal = () => document.getElementById('modal').style.display = 'none';
