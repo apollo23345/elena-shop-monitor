@@ -39,7 +39,7 @@
             background: rgba(0,0,0,0.6); 
             justify-content: center; 
             align-items: center; 
-            z-index: 10; /* Higher z-index to stay on top */
+            z-index: 9999; /* Higher z-index to stay on top */
         }
 
         .modal-content { 
@@ -483,9 +483,20 @@ window.handleBayClick = async (id, status, bayName) => {
         btnNow.style.display = 'block';
         setTimeMode('now'); // Reset to now when opening a fresh bay
     }
-
+// --- UPDATED LOGIC BELOW ---
     const { data: mechs } = await supabase.from('mechanics').select('*');
-    document.getElementById('mech-select').innerHTML = mechs.map(m => `<option value="${m.id}">${m.first_name} ${m.last_name}</option>`).join('');
+    
+    // Filter the list based on status
+    const availableMechs = mechs.filter(m => m.status === 'Available');
+
+    if (availableMechs.length === 0) {
+        document.getElementById('mech-select').innerHTML = `<option value="">❌ No Mechanics Available</option>`;
+    } else {
+        document.getElementById('mech-select').innerHTML = availableMechs.map(m => 
+            `<option value="${m.id}">${m.first_name} ${m.last_name}</option>`
+        ).join('');
+    }
+    // --- END OF UPDATED LOGIC ---
     document.getElementById('modal').style.display = 'flex';
 };
 
