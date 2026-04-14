@@ -794,7 +794,7 @@ window.deleteBooking = async (id) => {
         if (error) alert(error.message);
         loadData('service');
     };
-    window.saveMechanic = async (id) => {
+window.saveMechanic = async (id) => {
     const firstName = document.getElementById(`edit-mech-first-${id}`).value;
     const lastName = document.getElementById(`edit-mech-last-${id}`).value;
     const contact = document.getElementById(`edit-mech-contact-${id}`).value;
@@ -805,18 +805,19 @@ window.deleteBooking = async (id) => {
         .update({ 
             first_name: firstName, 
             last_name: lastName, 
-            contact: contact,
+            contact: contact, 
             status: status 
         })
         .eq('id', id);
 
     if (error) {
-        alert("Update failed: " + error.message);
+        alert("Error updating mechanic: " + error.message);
     } else {
-        alert("Mechanic updated successfully!");
+        alert(`Mechanic ${firstName} is now ${status}`);
         loadData('mechanics'); // Refresh the list
     }
 };
+
 window.saveInventory = async (id) => {
     const name = document.getElementById(`edit-inv-name-${id}`).value;
     const price = document.getElementById(`edit-inv-price-${id}`).value;
